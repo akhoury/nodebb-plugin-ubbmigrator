@@ -1,4 +1,6 @@
-var //rdb = require('../../src/redis.js'),
+var 
+    
+    //rdb = require('../../src/redis.js'),
     mysql = require("mysql"),
 
     //todo move this to a config file
@@ -9,40 +11,57 @@ var //rdb = require('../../src/redis.js'),
         database: "ubb_test"
     },
     ubbConnected = false,
-    ubbConnection = mysql.createConnection(ubbConfig);
+    ubbConnection = mysql.createConnection(ubbConfig),
+    
+    UBBMigrator = {
+        // connect to the ubb database
+        ubbConnect: function(cb){
+            cb = typeof cb == "function" ? cb : function(){};
+        
+            if (!ubbConnected) {
+                ubbConnection.connect(function(err){
+                    if (err) {
+                        ubbConnected = false;
+                        throw err;
+                    }
+                    ubbConnected = true;
+                    cb();
+                });
+            } else {
+                cb();    
+            }
+        },
+    
+        // disconnect from the ubb mysql database
+        ubbDisconnect: function(){
+            ubbConnection.end();
+            ubbConnected = false;
+        },
 
-var UBBMigrator = {
+        // query ubb mysql database
+        ubbq: function(q, cb){
+            this.ubbConnect(function(){
+                ubbConnection.query(q, cb);
+            });
+        },
 
-    ubbConnect: function(){
-        if (!ubbConnected) {
-            ubbConnection.connect();
-            ubbConnected = true;
-        }
-    },
+        // get ubb users
+        ubbGetUsers: function() {},
 
-    ubbq: function(q, cb){
-        this.ubbConnect();
-        ubbConnection.query(q, cb);
-    },
+        ubbGetBannedUsers: function() {},
 
-    // get ubb users
-    getUBBUsers: function() {},
+        ubbGetBannedEmails: function() {},
 
-    ubbGetBannedUsers: function() {},
+        ubbGtBannedHosts: function(){},
 
-    ubbGetBannedEmails: function() {},
+        // get ubb categories
+        getUBBTopics: function() {},
 
-    ubbGtBannedHosts: function(){},
+        // get ubb topics
+        getUBBTopics: function() {},
 
-
-    // get ubb categories
-    getUBBTopics: function() {},
-
-    // get ubb topics
-    getUBBTopics: function() {},
-
-    // get ubb posts
-    getUBBPosts: function() {}
-};
+        // get ubb posts
+        getUBBPosts: function() {}
+    };
 
 module.exports = UBBMigrator;
