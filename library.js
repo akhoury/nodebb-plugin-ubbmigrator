@@ -20,20 +20,29 @@ var UBBMigrator = {
         }
     },
 
-    getUBBUsers: function() {
+    ubbq: function(q, cb){
         this.ubbConnect();
-        console.log("getUBBUsers called");
+        ubbConnection.query(q, cb);
     },
 
-    getUBBTopics: function() {
-        this.ubbConnect();
-        console.log("getUBBTopics called");
-    },
+    // get ubb users
+    getUBBUsers: function() {},
 
-    getUBBPosts: function() {
-        this.ubbConnect();
-        console.log("getUBBPosts called");
-    }
+    ubbGetBannedUsers: function() {},
+
+    ubbGetBannedEmails: function() {},
+
+    ubbGtBannedHosts: function(){},
+
+
+    // get ubb categories
+    getUBBTopics: function() {},
+
+    // get ubb topics
+    getUBBTopics: function() {},
+
+    // get ubb posts
+    getUBBPosts: function() {}
 };
 
 module.exports = UBBMigrator;
