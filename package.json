@@ -1,0 +1,31 @@
+{
+    "name": "nodebb-plugin-ubbmigrator",
+    "version": "0.0.1",
+    "description": "Converts your UBB Topics, Posts and Users to NodeBB",
+    "main": "library.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/akhoury/nodebb-plugin-ubbmigrator"
+    },
+    "keywords": [
+        "nodebb",
+        "plugin",
+        "migrator",
+        "convertor",
+        "ubb"
+    ],
+    "author": {
+        "name": "akhoury",
+        "email": "bentael@gmail.com"
+    },
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/akhoury/nodebb-plugin-ubbmigrator/issues"
+    },
+    "dependencies": {
+        "mysql": "~2.0.0"
+    }
+}

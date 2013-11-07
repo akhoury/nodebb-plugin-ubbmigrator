@@ -1,0 +1,8 @@
+{
+    "id": "nodebb-plugin-ubbmigrator",
+    "name": "UBB to NodeBB Migrator Plugin",
+    "description": "Converts your UBB Topics, Posts and Users to NodeBB",
+    "url": "https://github.com/akhoury/nodebb-plugin-ubbmigrator",
+    "library": "./library.js",
+    "hooks": []
+}
