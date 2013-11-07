@@ -1,3 +1,5 @@
+##NOT READY YET - DO NOT USE - CHECK BACK IN A WEEK
+
 nodebb-plugin-ubbmigrator
 =========================
 
