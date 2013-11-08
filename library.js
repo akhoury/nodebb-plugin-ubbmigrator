@@ -10,10 +10,11 @@ var
         password: "password",
         database: "ubb_test"
     },
+    ubbPrefix = "ubbt_",
     ubbConnected = false,
-    ubbConnection = mysql.createConnection(ubbConfig),
-    
-    UBBMigrator = {
+    ubbConnection = mysql.createConnection(ubbConfig);
+
+module.exports = {
         // connect to the ubb database
         ubbConnect: function(cb){
             cb = typeof cb == "function" ? cb : function(){};
@@ -46,9 +47,28 @@ var
         },
 
         // get ubb users
-        ubbGetUsers: function() {},
+        ubbGetUsers: function() {
+            var users = [];
+            var self = this;
 
-        ubbGetBannedUsers: function() {},
+            this.ubbq("", function(){
+
+            });
+        },
+
+        ubbGetBannedUsers: function(cb) {
+            var banned = {};
+            this.ubbq("SELECT * FROM " + ubbPrefix + "BANNED_USERS;", function(err, rows){
+                if (err) throw err;
+
+                rows.forEach(function(row){
+                    banned[row.USER_ID] = row.BAN_REASON || "UNKNOWN";
+                });
+
+                console.log(banned);
+                //cb(banned);
+            });
+        },
 
         ubbGetBannedEmails: function() {},
 
@@ -63,5 +83,3 @@ var
         // get ubb posts
         getUBBPosts: function() {}
     };
-
-module.exports = UBBMigrator;
