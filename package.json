@@ -26,6 +26,7 @@
         "url": "https://github.com/akhoury/nodebb-plugin-ubbmigrator/issues"
     },
     "dependencies": {
+        "bcrypt": "0.7.5",
         "mysql": "~2.0.0"
     }
 }
