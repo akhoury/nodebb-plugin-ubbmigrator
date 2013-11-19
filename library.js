@@ -51,7 +51,7 @@ var
         password: "password",
         database: "ubb_test"
     },
-    ubbPrefix = "ubbt_",
+    ubbTablePrefix = "ubbt_",
 
 // mysql connection to ubb database
     ubbConnection = mysql.createConnection(ubbConfig),
@@ -111,7 +111,7 @@ module.exports = {
     nbbSaveUsers: function() {
         var self = this;
         var users = require("./tmp/ubb/users.json");
-        var chars = '!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890';
+        var chars = "!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890";
 
         // iterate over each
         Object.keys(users).forEach(function(key, ui){
@@ -341,7 +341,7 @@ module.exports = {
                 + " USER_MEMBERSHIP_LEVEL as level, USER_REGISTERED_ON as joindate,"
                 + " USER_IS_APPROVED as approved, USER_IS_banned as banned",
             // from
-            "ubbPrefixUSERS",
+            ubbTablePrefix + "USERS",
             {
                 queryCallback: function(err, rows, fields, lastOne){
                     if (err) throw err;
@@ -380,7 +380,7 @@ module.exports = {
                 + " USER_TOTAL_RATES as total_rates, USER_BIRTHDAY as birthday,"
                 + " USER_UNVERIFIED_EMAIL as unverified_email",
             // from
-            "ubbPrefixUSER_PROFILE",
+            ubbTablePrefix + "USER_PROFILE",
             {
                 queryCallback: function(err, rows, fields, lastOne){
                     if (err) throw err;
@@ -411,7 +411,7 @@ module.exports = {
             // select
             "CATEGORY_ID as ocid, CATEGORY_TITLE as name, CATEGORY_DESCRIPTION as description",
             // from
-            "ubbPrefixCATEGORIES",
+            ubbTablePrefix + "CATEGORIES",
             {
                 queryCallback: function(err, rows, fields, lastOne){
                     if (err) throw err;
@@ -440,7 +440,7 @@ module.exports = {
             "FORUM_ID as ofid, FORUM_TITLE as title, FORUM_DESCRIPTION as description,"
                 + " CATEGORY_ID as category_id, FORUM_CREATED_ON as joindate",
             // from
-            "ubbPrefixFORUMS",
+            ubbTablePrefix + "FORUMS",
             {
                 queryCallback: function(err, rows, fields, lastOne){
                     if (err) throw err;
@@ -470,7 +470,7 @@ module.exports = {
             + " USER_ID as user_id, POST_DEFAULT_BODY as default_body,",
             + " POST_MARKUP_TYPE as markup, POST_IS_APPROVED as approved",
             // from
-            "ubbPrefixPOSTS",
+            ubbTablePrefix + "POSTS",
             {
                 queryCallback: function(err, rows, fields, lastOne){
                     if (err) throw err;
