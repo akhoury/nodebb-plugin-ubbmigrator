@@ -414,11 +414,7 @@ module.exports = {
                 + "(\\?[;&a-z\\d%_.~+=-]*)?"
                 + "(\\#[-a-z\\d_]*)?$", "i");
 
-        if(!pattern.test(url)) {
-            return false;
-        } else {
-            return true;
-        }
+       return pattern.test(url);
     },
 
     // a helper method to generate temporary passwords
