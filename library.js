@@ -1,10 +1,12 @@
 /*
-    if you're reading this source please not that NodeBB == nbb ==  Nbb == NBB as a terminology
+    if you're reading this source please not that "NodeBB" == "nbb" ==  "Nbb" == "NBB" as a terminology
     and ubb means the UBB Threads Forum Software, here's a link => http://www.ubbcentral.com/
 
-    This Converter is written and tested for UBB 7.5.7, released in 2013, so.. if you're reading this in 2200, it's probably outdated.
+    This Converter is written and tested for UBB 7.5.7, released in 2013,
+    so.. if you're reading this in 2200, it's probably outdated.
  */
 
+// todo fix all ids var names
 // todo user ranking formula to preserve the karma
 // todo check different formats for UBB posts; html, md or something else?
 // todo call the major functions in a sync order
@@ -93,12 +95,12 @@ module.exports = {
 
                 // you will need these to create "RewriteRules", i'll let you figure that out
                 category._redirect = {
-                    from: "[YOUR_UBB_PATH]/ubbthreads.php/category/" + data.id + "/*",
+                    from: "[YOUR_UBB_PATH]/ubbthreads.php/category/" + data.ocid + "/*",
                     to: "[YOUR_NBB_PATH]/category/" + category.cid + "/" + category.slug
                 };
 
                 // save a reference from the old category to the new one
-                MAP.categories[data.id] = category;
+                MAP.categories[data.ocid] = category;
 
                 console.log("[ubbmigrator][redirect]" + category._redirect.from + " ---> " + category._redirect.to);
             })
@@ -204,13 +206,13 @@ module.exports = {
                 }
 
                 data._redirect = {
-                    from: "[YOUR_UBB_PATH]/ubbthreads.php/users/" + data.id + "/" + data.originalUsername + "*",
+                    from: "[YOUR_UBB_PATH]/ubbthreads.php/users/" + data.ouid + "/" + data.originalUsername + "*",
                     to: "[YOUR_NBB_PATH]/user/" + data.userslug
                 };
                 console.log("[ubbmigrator][redirect]" + data._redirect.from + " ---> " + data._redirect.to);
 
                 // just save a copy in my big MAP for later, minus the correct website and avatar, who cares for now.
-                MAP.users[data.id] = data;
+                MAP.users[data.ouid] = data;
             })
         });
     },
@@ -228,9 +230,9 @@ module.exports = {
             Topics.create(data, function(err, topic){
                 if (err) throw err;
                 // save a reference from the old category to the new one
-                MAP.topics[data.id] = topic;
+                MAP.topics[data.ofid] = topic;
 
-                console.log("[ubbmigrator] [ubb][" + data.id + "]--->[nbb][/topic/" + topic.cid + "/" + topic.slug);
+                console.log("[ubbmigrator] [ubb][" + data.ofid + "]--->[nbb][/topic/" + topic.tid + "/" + topic.slug);
             })
         });
     },
@@ -247,9 +249,9 @@ module.exports = {
             Posts.create(data, function(err, post){
                 if (err) throw err;
                 // save a reference from the old category to the new one
-                MAP.topics[data.id] = post;
+                MAP.topics[data.opid] = post;
 
-                console.log("[ubbmigrator] [ubb][" + data.id + "]--->[nbb][/post/" + post.cid + "/" + post.slug);
+                console.log("[ubbmigrator] [ubb][" + data.opid + "]--->[nbb][/post/" + post.pid + "/" + post.slug);
             })
         });
     },
@@ -335,7 +337,7 @@ module.exports = {
         var self = this;
         this.throttleSelectQuery(
             // select
-            "USER_ID as id, USER_LOGIN_NAME as username, USER_REGISTRATION_EMAIL as email,"
+            "USER_ID as ouid, USER_LOGIN_NAME as username, USER_REGISTRATION_EMAIL as email,"
                 + " USER_MEMBERSHIP_LEVEL as level, USER_REGISTERED_ON as joindate,"
                 + " USER_IS_APPROVED as approved, USER_IS_banned as banned",
             // from
@@ -348,7 +350,7 @@ module.exports = {
 
                     if (lastOne) {
                         console.log("[ubbmigrator] USERS: " + ubbData.users.length);
-                        ubbData.users = self.convertListToMap(ubbData.users, "id");
+                        ubbData.users = self.convertListToMap(ubbData.users, "ouid");
                         self.ubbGetUsersProfiles(ubbData.users);
                     }
                 }
@@ -370,7 +372,7 @@ module.exports = {
         this.throttleSelectQuery(
 
             // select
-            "USER_ID as id, USER_SIGNATURE as signature, USER_HOMEPAGE as website,"
+            "USER_ID as ouid, USER_SIGNATURE as signature, USER_HOMEPAGE as website,"
                 + " USER_OCCUPATION as occupation, USER_LOCATION as location,"
                 + " USER_AVATAR as avatar, USER_TITLE as title,"
                 + " USER_POSTS_PER_TOPIC as posts_per_topic, USER_TEMPORARY_PASSWORD as temp_password,"
@@ -387,7 +389,7 @@ module.exports = {
                     if (lastOne) {
                         console.log("[ubbmigrator] USERS PROFILE: " + ubbData.usersProfiles.length);
                         ubbData.usersProfiles.forEach(function(profile){
-                            ubbData.users[profile.id] = $.extend({}, profile, ubbData.users[profile.id]);
+                            ubbData.users[profile.ouid] = $.extend({}, profile, ubbData.users[profile.ouid]);
                         });
 
                         self.writeJSONtoFile("tmp/ubb/users.json", ubbData.users, function(err){
@@ -407,7 +409,7 @@ module.exports = {
         var self = this;
         this.throttleSelectQuery(
             // select
-            "CATEGORY_ID as oid, CATEGORY_TITLE as name, CATEGORY_DESCRIPTION as description",
+            "CATEGORY_ID as ocid, CATEGORY_TITLE as name, CATEGORY_DESCRIPTION as description",
             // from
             "ubbPrefixCATEGORIES",
             {
@@ -430,11 +432,12 @@ module.exports = {
     },
 
     // get ubb forums
+    // aka topics in nbb notations
     ubbGetForums: function() {
         var self = this;
         this.throttleSelectQuery(
             // select
-            "FORUM_ID as id, FORUM_TITLE as title, FORUM_DESCRIPTION as description,"
+            "FORUM_ID as ofid, FORUM_TITLE as title, FORUM_DESCRIPTION as description,"
                 + " CATEGORY_ID as category_id, FORUM_CREATED_ON as joindate",
             // from
             "ubbPrefixFORUMS",
@@ -461,7 +464,7 @@ module.exports = {
         var self = this;
         this.throttleSelectQuery(
             // select
-            "POST_ID as id, POST_PARENT_ID as parent, POST_PARENT_USER_ID as parent_user_id, TOPIC_ID as topic_id,"
+            "POST_ID as poid, POST_PARENT_ID as parent, POST_PARENT_USER_ID as parent_user_id, TOPIC_ID as topic_id,"
                 + " POST_POSTED_TIME as joindate, POST_SUBJECT as subject,"
                 + " POST_BODY as body, POST_DEFAULT_BODY as default_body,",
             + " USER_ID as user_id, POST_DEFAULT_BODY as default_body,",
