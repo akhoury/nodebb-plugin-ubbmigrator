@@ -1,3 +1,5 @@
+"use strict";
+
 var
 
 // NodeBB Objects
@@ -146,19 +148,21 @@ module.exports = {
                 if (data.avatar) {
                     self._checkUrlResponse(data.avatar, function(result){
                         var picUrl;
+
                         // if it's not good
                         if (!result) {
-                            picUrl = "";
-                        } else {
                             // NodeBB creates an avatar url so, if the user have an older one and still good, we keep it
                             // if not we try to create a gravatar from the realEmail not the fake one we created on top
                             picUrl = User.createGravatarURLFromEmail(data.realEmail);
+                        } else {
+                            picUrl = data.avatar;
                         }
+
                         User.setUserField(uid, "picture", picUrl, function(){
-                            console.log("[ubbmigrator] User[" + uid + "].picture:[" + data.avatar + "] reset to " + picUrl);
+                            console.log("[ubbmigrator] User[" + uid + "].picture:[" + data.avatar + "] set to " + picUrl);
                         });
                         User.setUserField(uid, "gravatarpicture", picUrl, function(){
-                            console.log("[ubbmigrator] User[" + uid + "].gravatarpicture:[" + data.avatar + "] reset to " + picUrl);
+                            console.log("[ubbmigrator] User[" + uid + "].gravatarpicture:[" + data.avatar + "] set to " + picUrl);
                         });
                     });
                 }
@@ -168,8 +172,8 @@ module.exports = {
 
 
     // connect to the ubb database
-    ubbConnect: function(cb){
-        cb = typeof cb == "function" ? cb : function(){};
+    ubbConnect: function(callback){
+        callback = typeof callback == "function" ? callback : function(){};
         var self = this;
 
         console.log("[ubbmigrator] ubbConnect Called; ubbConnected: " + self.ubbConnected);
@@ -180,14 +184,14 @@ module.exports = {
                     self.ubbConnected = false;
                     // debugger;
                     // throw err;
-                    cb();
+                    callback();
                 } else {
                     self.ubbConnected = true;
-                    cb();
+                    callback();
                 }
             });
         } else {
-            cb();
+            callback();
         }
     },
 
@@ -198,14 +202,14 @@ module.exports = {
     },
 
     // query ubb mysql database
-    ubbq: function(q, cb){
+    ubbq: function(q, callback){
         this.ubbConnect(function(){
-            ubbConnection.query(q, cb);
+            ubbConnection.query(q, callback);
         });
     },
 
-    writeJSONtoFile: function(file, json, cb){
-        fs.writeFile(file, JSON.stringify(json, null, 4), cb);
+    writeJSONtoFile: function(file, json, callback){
+        fs.writeFile(file, JSON.stringify(json, null, 4), callback);
     },
 
     throttleSelectQuery: function(columnsString, table, options) {
@@ -340,12 +344,6 @@ module.exports = {
                 }
             }
         );
-    },
-
-    _normalizeCategoties: function(rows){
-        return rows.map(function(row, i){
-            row["blockclass"] = ""
-        });
     },
 
     // get ubb forums
