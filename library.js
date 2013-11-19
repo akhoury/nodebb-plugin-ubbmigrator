@@ -1,6 +1,25 @@
-// todo user ranking formula
+/*
+    if you're reading this source please not that NodeBB == nbb ==  Nbb == NBB as a terminology
+    and ubb means the UBB Threads Forum Software, here's a link => http://www.ubbcentral.com/
+
+    This Converter is written and tested for UBB 7.5.7, released in 2013, so.. if you're reading this in 2200, it's probably outdated.
+ */
+
+// todo user ranking formula to preserve the karma
 // todo check different formats for UBB posts; html, md or something else?
-// call the major functions in a sync order
+// todo call the major functions in a sync order
+// todo limit the signature to 150 Chars
+// todo write up the posts from ubb migrator
+// todo write up the topics to nbb migrator
+// todo write up the posts to nbb migrator
+
+// todo generate my nginx rewrite rules
+// todo still, make sure the [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars
+// todo clear the default categories in nodebb/install so I would start with fresh categories.
+
+// todo send emails to all users with temp passwords
+// todo if I have time, maybe implement a nbb plugin that enforces the 1 time use of temp passwords.
+// todo TEST yo
 
 "use strict";
 
@@ -489,9 +508,10 @@ module.exports = {
 
     _checkUrlResponse: function(url, callback) {
         http.get(url, function(res) {
-            res.on("data", function(c){});
-            res.on("end", function() {
+            res.on("data", function(c){
                 callback(true);
+            });
+            res.on("end", function() {
             });
             res.on("error", function() {
                 callback(false)
