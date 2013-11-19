@@ -5,7 +5,7 @@ var
 // NodeBB Objects
     Categories = module.parent.require('./categories'),
     User = module.parent.require('./user'),
-    Topic = module.parent.require('./topics'),
+    Topics = module.parent.require('./topics'),
     Posts = module.parent.require('./posts'),
 
 // some useful modules
@@ -170,6 +170,44 @@ module.exports = {
         });
     },
 
+
+    // save the UBB topics to NodeBB's redis
+    nbbSaveTopics: function(){
+        var topics = require("./tmp/ubb/topics.json");
+
+        // iterate over each
+        Object.keys(topics).forEach(function(key, ti){
+            // get the data from db
+            var data = topics[key];
+
+            Topics.create(data, function(err, topic){
+                if (err) throw err;
+                // save a reference from the old category to the new one
+                MAP.topics[data.id] = topic;
+
+                console.log("[ubbmigrator] [ubb][" + data.id + "]--->[nbb][/topic/" + topic.cid + "/" + topic.slug);
+            })
+        });
+    },
+
+    // save the UBB posts to NodeBB's redis
+    nbbSavePosts: function(){
+        var posts = require("./tmp/ubb/posts.json");
+
+        // iterate over each
+        Object.keys(posts).forEach(function(key, pi){
+            // get the data from db
+            var data = topics[key];
+
+            Posts.create(data, function(err, post){
+                if (err) throw err;
+                // save a reference from the old category to the new one
+                MAP.topics[data.id] = post;
+
+                console.log("[ubbmigrator] [ubb][" + data.id + "]--->[nbb][/post/" + post.cid + "/" + post.slug);
+            })
+        });
+    },
 
     // connect to the ubb database
     ubbConnect: function(callback){
