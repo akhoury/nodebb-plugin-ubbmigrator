@@ -1,4 +1,4 @@
-##NOT READY YET - I AM GETTING THERE - DO NOT USE - CHECK BACK IN A WEEK
+##NOT READY YET - I AM GETTING THERE - DO NOT USE YET - CHECK BACK IN A WEEK
 
 nodebb-plugin-ubbmigrator
 =========================

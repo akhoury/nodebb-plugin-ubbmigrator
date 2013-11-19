@@ -132,32 +132,36 @@ module.exports = {
                 });
 
                 // some sanity async checks
-                self._checkUrlResponse(data.homepage, function(result){
-                    // if it's not good
-                    if (!result) {
-                        User.setUserField(uid, "website", "", function(){
-                            console.log("[ubbmigrator] User[" + uid + "].website[" + data.homepage + "] reset to ");
-                        });
+                if (data.homepage) {
+                    self._checkUrlResponse(data.homepage, function(result){
+                        // if it's not good
+                        if (!result) {
+                            User.setUserField(uid, "website", "", function(){
+                                console.log("[ubbmigrator] User[" + uid + "].website[" + data.homepage + "] reset to ");
+                            });
+                        }
+                    });
+                }
 
-                    }
-                });
-                self._checkUrlResponse(data.avatar, function(result){
-                    var picUrl;
-                    // if it's not good
-                    if (!result) {
-                        picUrl = "";
-                    } else {
-                        // NodeBB creates an avatar url so, if the user have an older one and still good, we keep it
-                        // if not we try to create a gravatar from the realEmail not the fake one we created on top
-                        picUrl = User.createGravatarURLFromEmail(data.realEmail);
-                    }
-                    User.setUserField(uid, "picture", picUrl, function(){
-                        console.log("[ubbmigrator] User[" + uid + "].picture:[" + data.avatar + "] reset to " + picUrl);
+                if (data.avatar) {
+                    self._checkUrlResponse(data.avatar, function(result){
+                        var picUrl;
+                        // if it's not good
+                        if (!result) {
+                            picUrl = "";
+                        } else {
+                            // NodeBB creates an avatar url so, if the user have an older one and still good, we keep it
+                            // if not we try to create a gravatar from the realEmail not the fake one we created on top
+                            picUrl = User.createGravatarURLFromEmail(data.realEmail);
+                        }
+                        User.setUserField(uid, "picture", picUrl, function(){
+                            console.log("[ubbmigrator] User[" + uid + "].picture:[" + data.avatar + "] reset to " + picUrl);
+                        });
+                        User.setUserField(uid, "gravatarpicture", picUrl, function(){
+                            console.log("[ubbmigrator] User[" + uid + "].gravatarpicture:[" + data.avatar + "] reset to " + picUrl);
+                        });
                     });
-                    User.setUserField(uid, "gravatarpicture", picUrl, function(){
-                        console.log("[ubbmigrator] User[" + uid + "].gravatarpicture:[" + data.avatar + "] reset to " + picUrl);
-                    });
-                });
+                }
             })
         });
     },
