@@ -2,7 +2,7 @@
 
 var
 
-// NodeBB Objects
+// nbb Objects
     Categories = module.parent.require('./categories'),
     User = module.parent.require('./user'),
     Topics = module.parent.require('./topics'),
@@ -49,7 +49,7 @@ var
 
 module.exports = {
 
-    // save the UBB categories to NodeBB's redis
+    // save the UBB categories to nbb's redis
     nbbSaveCategories: function(){
         var categories = require("./tmp/ubb/categories.json");
 
@@ -76,7 +76,7 @@ module.exports = {
         });
     },
 
-    // save the UBB users to NodeBB's redis
+    // save the UBB users to nbb's redis
     nbbSaveUsers: function() {
         var self = this;
         var users = require("./tmp/ubb/users.json");
@@ -91,13 +91,13 @@ module.exports = {
             data.username = data.username ? data.username.toLowerCase() : "";
 
             // lower case the email as well, but I won't use it for the creation of the user
-            // NodeBB tries to send an email at the creation of the user account
-            // so after looking at nodebb source, it looks like i can get away with setting some
+            // nbb tries to send an email at the creation of the user account
+            // so after looking at nbb source, it looks like i can get away with setting some
             // email that doesn't work, but still validates, then after I set it back to the original email
             data.realEmail = data.email ? data.email.toLowerCase() : "";
             // todo: i should probably move that to a config, just in case you don't want to do that
             // also that will mess up the gravatar generated url, so I fix that at the end of each iteration, keep scrolling
-            data.email = "unique.email.that.doesnt.work." + ui + "@but.still.validates.nodebb.check.so";
+            data.email = "unique.email.that.doesnt.work." + ui + "@but.still.validates.nbb.check.so";
 
             // I don't know about you about I noticed a lot my users have incomplete urls
             data.avatar = self._isValidUrl(data.avatar) ? data.avatar : undefined;
@@ -151,7 +151,7 @@ module.exports = {
 
                         // if it's not good
                         if (!result) {
-                            // NodeBB creates an avatar url so, if the user have an older one and still good, we keep it
+                            // nbb creates an avatar url so, if the user have an older one and still good, we keep it
                             // if not we try to create a gravatar from the realEmail not the fake one we created on top
                             picUrl = User.createGravatarURLFromEmail(data.realEmail);
                         } else {
@@ -171,7 +171,7 @@ module.exports = {
     },
 
 
-    // save the UBB topics to NodeBB's redis
+    // save the UBB topics to nbb's redis
     nbbSaveTopics: function(){
         var topics = require("./tmp/ubb/topics.json");
 
@@ -190,7 +190,7 @@ module.exports = {
         });
     },
 
-    // save the UBB posts to NodeBB's redis
+    // save the UBB posts to nbb's redis
     nbbSavePosts: function(){
         var posts = require("./tmp/ubb/posts.json");
 
