@@ -1,3 +1,7 @@
+// todo user ranking formula
+// todo check different formats for UBB posts; html, md or something else?
+// call the major functions in a sync order
+
 "use strict";
 
 var
@@ -65,13 +69,19 @@ module.exports = {
             // order based on index i guess
             data.order = ci + 1;
 
-            Categories.create(data, function(err, category){
+            Categories.create(data, function(err, category) {
                 if (err) throw err;
+
+                // you will need these to create "RewriteRules", i'll let you figure that out
+                category._redirect = {
+                    from: "[YOUR_UBB_PATH]/ubbthreads.php/category/" + data.id + "/*",
+                    to: "[YOUR_NBB_PATH]/category/" + category.cid + "/" + category.slug
+                };
 
                 // save a reference from the old category to the new one
                 MAP.categories[data.id] = category;
 
-                console.log("[ubbmigrator] [ubb][" + data.id + "]--->[nbb][/category/" + category.cid + "/" + category.slug);
+                console.log("[ubbmigrator][redirect]" + category._redirect.from + " ---> " + category._redirect.to);
             })
         });
     },
@@ -88,6 +98,7 @@ module.exports = {
             var data = users[key];
 
             // just being safe
+            data.originalUsername = data.username;
             data.username = data.username ? data.username.toLowerCase() : "";
 
             // lower case the email as well, but I won't use it for the creation of the user
@@ -101,45 +112,51 @@ module.exports = {
 
             // I don't know about you about I noticed a lot my users have incomplete urls
             data.avatar = self._isValidUrl(data.avatar) ? data.avatar : undefined;
-            data.homepage = self._isValidUrl(data.homepage) ? data.homepage : undefined;
+            data.website = self._isValidUrl(data.website) ? data.website : undefined;
+
+            data.signatureMd = htmlToMarkdown(data.signature);
 
             // generate a temp password, don't worry i'll add the clear text to the map so you can email it to the user
             // todo: maybe make these 2 params as configs
-            data.password = this._genRandPwd(13, chars);
+            data.clearPassword = this._genRandPwd(13, chars);
 
-            User.create(data.username, data.password, data.email, function(err, uid){
+            User.create(data.username, data.clearPassword, data.email, function(err, uid){
                 if (err) throw err;
+
+                // saving that for the map
+                data.uid = uid;
 
                 User.getUserField(uid, "userslug", function(err, userslug){
 
                     data.userslug = userslug;
 
-                    // todo: take out the password out of the log
-                    console.log("[ubbmigrator] [ubb][" + data.id + "]--->[nbb][/user/" + userslug + "?udi=" + uid + "&pwd=" + data.password);
-
                     // set some of the fields got from the ubb
                     User.setUserFields(uid, {
-                        // preseve the signature and homepage if there is any
-                        signature: htmlToMarkdown(data.signature),
-                        website: data.homepage || "",
+                        // preseve the signature and website if there is any
+                        signature: data.signatureMd,
+                        website: data.website || "",
                         // if that user is banned, we would still h/im/er to be
                         banned: data.banned,
                         // reset the location
                         location: data.location || "",
                         // preserse the  joindate, luckily here, ubb uses timestamps too
-                        joindate: data.created_at,
+                        joindate: data.joindate,
                         // now I set the real email back in
                         email: data.realEmail
                     });
+
+                    // saving that for the map
+                    data.email = data.realEmail;
+
                 });
 
                 // some sanity async checks
-                if (data.homepage) {
-                    self._checkUrlResponse(data.homepage, function(result){
+                if (data.website) {
+                    self._checkUrlResponse(data.website, function(result){
                         // if it's not good
                         if (!result) {
                             User.setUserField(uid, "website", "", function(){
-                                console.log("[ubbmigrator] User[" + uid + "].website[" + data.homepage + "] reset to ");
+                                console.log("[ubbmigrator] User[" + uid + "].website[" + data.website + "] reset.");
                             });
                         }
                     });
@@ -166,6 +183,15 @@ module.exports = {
                         });
                     });
                 }
+
+                data._redirect = {
+                    from: "[YOUR_UBB_PATH]/ubbthreads.php/users/" + data.id + "/" + data.originalUsername + "*",
+                    to: "[YOUR_NBB_PATH]/user/" + data.userslug
+                };
+                console.log("[ubbmigrator][redirect]" + data._redirect.from + " ---> " + data._redirect.to);
+
+                // just save a copy in my big MAP for later, minus the correct website and avatar, who cares for now.
+                MAP.users[data.id] = data;
             })
         });
     },
@@ -291,7 +317,7 @@ module.exports = {
         this.throttleSelectQuery(
             // select
             "USER_ID as id, USER_LOGIN_NAME as username, USER_REGISTRATION_EMAIL as email,"
-                + " USER_MEMBERSHIP_LEVEL as level, USER_REGISTERED_ON as created_at,"
+                + " USER_MEMBERSHIP_LEVEL as level, USER_REGISTERED_ON as joindate,"
                 + " USER_IS_APPROVED as approved, USER_IS_banned as banned",
             // from
             "ubbPrefixUSERS",
@@ -325,7 +351,7 @@ module.exports = {
         this.throttleSelectQuery(
 
             // select
-            "USER_ID as id, USER_SIGNATURE as signature, USER_HOMEPAGE as homepage,"
+            "USER_ID as id, USER_SIGNATURE as signature, USER_HOMEPAGE as website,"
                 + " USER_OCCUPATION as occupation, USER_LOCATION as location,"
                 + " USER_AVATAR as avatar, USER_TITLE as title,"
                 + " USER_POSTS_PER_TOPIC as posts_per_topic, USER_TEMPORARY_PASSWORD as temp_password,"
@@ -390,7 +416,7 @@ module.exports = {
         this.throttleSelectQuery(
             // select
             "FORUM_ID as id, FORUM_TITLE as title, FORUM_DESCRIPTION as description,"
-                + " CATEGORY_ID as category_id, FORUM_CREATED_ON as created_at",
+                + " CATEGORY_ID as category_id, FORUM_CREATED_ON as joindate",
             // from
             "ubbPrefixFORUMS",
             {
@@ -417,7 +443,7 @@ module.exports = {
         this.throttleSelectQuery(
             // select
             "POST_ID as id, POST_PARENT_ID as parent, POST_PARENT_USER_ID as parent_user_id, TOPIC_ID as topic_id,"
-                + " POST_POSTED_TIME as created_at, POST_SUBJECT as subject,"
+                + " POST_POSTED_TIME as joindate, POST_SUBJECT as subject,"
                 + " POST_BODY as body, POST_DEFAULT_BODY as default_body,",
             + " USER_ID as user_id, POST_DEFAULT_BODY as default_body,",
             + " POST_MARKUP_TYPE as markup, POST_IS_APPROVED as approved",
