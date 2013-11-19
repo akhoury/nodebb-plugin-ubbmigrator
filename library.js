@@ -1,21 +1,22 @@
 var
 
-// RDB = module.parent.require('./redis'),
-// utils = module.parent.require('./../public/src/utils.js'),
+    // NodeBB Objects
+    Categories = module.parent.require('./categories'),
+    User = module.parent.require('./user'),
+    Topic = module.parent.require('./topics'),
+    Posts = module.parent.require('./posts'),
 
-    RDB = {
-        hmset: function(obj, cb){ console.log("hmset saving:"); console.log(obj);}
-    },
-
-    utils = require(""),
-
+    // some useful modules
+    // mysql to talk to ubb db
     mysql = require("mysql"),
-
-    async = require("async"),
+    // exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
+    htmlToMarkdown = require("html-md"),
+    // I'm lazy
     $ = require("jquery"),
+    // you know what that is if you're looking at this source
     fs = require("fs"),
 
-//todo move this to a config file
+    //todo move this to a config file
     ubbConfig =  {
         host: "127.0.0.1",
         user: "ubb_user",
@@ -24,141 +25,98 @@ var
     },
     ubbPrefix = "ubbt_",
 
+    // mysql connection to ubb database
     ubbConnection = mysql.createConnection(ubbConfig),
-
+    // ubbData in memory for a little while
     ubbData = {
         users: [],
         usersProfiles: [],
         categories: [],
         forums: [],
         posts: []
+    },
+
+    // ubb to nbb map in memory
+    MAP = {
+        categories: {},
+        users: {},
+        topics: {},
+        posts: {}
     };
 
 module.exports = {
 
+    // save the UBB categories to NodeBB's redis
     nbbSaveCategories: function(){
         var categories = require("./tmp/ubb/categories.json");
-        Object.keys(categories).forEach(function(key){
+
+        // iterate over each
+        Object.keys(categories).forEach(function(key, ci){
+            // get the data from db
             var data = categories[key];
 
-            RDB.incr('global:next_category_id', function(err, cid) {
-                if (err) {
-                    return callback(err, null);
-                }
+            // set some defaults since i don't have them
+            data.icon = "icon-comment";
+            data.blockclass = "category-blue";
 
-                var slug = cid + '/' + utils.slugify(data.name);
-                RDB.rpush('categories:cid', cid);
+            // order based on index i guess
+            data.order = ci + 1;
 
-                var category = {
-                    cid: cid,
-                    name: data.name,
-                    description: data.description,
+            Categories.create(data, function(err, category){
+                if (err) throw err;
 
-                    // hard coded values, i'll just consider them defaults.
-                    icon: "icon-comment",
-                    blockclass: "category-blue",
+                // save a reference from the old category to the new one
+                MAP.categories[data.id] = category;
 
-                    slug: slug,
-                    topic_count: 0,
-                    disabled: 0,
-                    order: data.order,
-
-                    // saving old id from ubb here
-                    _ubb_id: data.id
-                };
-
-                RDB.hmset('category:' + cid, category, function(err, data) {
-                    callback(err, category);
-                });
-            });
-
+                console.log("[ubb][" + data.id + "]--->[nbb][/category/" + category.cid + "/" + category.slug);
+            })
         });
     },
 
+    // save the UBB users to NodeBB's redis
     nbbSaveUsers: function() {
+        var self = this;
         var users = require("./tmp/ubb/users.json");
+        var chars = '!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890';
 
-        Object.keys(users).forEach(function(key) {
-            var _user = users[key];
-            var username = _user.username;
-            var email = _user.email;
-            var password = "qqqq";
+        // iterate over each
+        Object.keys(users).forEach(function(key, ci){
+            // get the data from db
+            var data = users[key];
 
-            var userslug = utils.slugify(username);
+            // just being safe
+            data.email = data.email ? data.email.toLowerCase() : "";
+            data.username = data.username ? data.username.toLowerCase() : "";
 
-            username = username.trim();
-            if (email !== undefined) {
-                email = email.trim();
-            }
+            // I don't know about you about I noticed a lot my users have incomplete urls
+            data.avatar = self._isValidUrl(data.avatar) ? data.avatar : undefined;
+            data.homepage = self._isValidUrl(data.homepage) ? data.homepage : undefined;
 
-            RDB.incr('global:next_user_id', function(err, uid) {
-                RDB.handle(err);
+            // generate a temp password, don't worry i'll add the clear text to the map so you can email it to the user
+            // todo maybe make these 2 params as configs
+            data.password = this._genRandPwd(13, chars);
 
-                var gravatar = User.createGravatarURLFromEmail(email);
-                var timestamp = Date.now();
+            User.create(data.username, data.password, data.email, function(err, uid){
+                if (err) throw err;
 
-                RDB.hmset('user:' + uid, {
-                    'uid': uid,
-                    'username': username,
-                    'userslug': userslug,
-                    'fullname': '',
-                    'location': '',
-                    'birthday': '',
-                    'website': '',
-                    'email': email || '',
-                    'signature': '',
-                    'joindate': timestamp,
-                    'picture': gravatar,
-                    'gravatarpicture': gravatar,
-                    'uploadedpicture': '',
-                    'profileviews': 0,
-                    'reputation': 0,
-                    'postcount': 0,
-                    'lastposttime': 0,
-                    'banned': 0,
-                    'showemail': 0
+                User.getUserField(uid, "userslug", function(err, userslug){
+
+                    // todo take out the password out of the log
+                    console.log("[ubb][" + data.id + "]--->[nbb][/user/" + userslug + "?udi=" + uid + "&pwd=" + data.password);
+
+                    // set some of the fields got from the ubb
+                    User.setUserFields(uid, {
+                        signature: htmlToMarkdown(data.signature),
+                        website: data.homepage || "",
+                        picture: data.avatar || undefined,
+                        gravatarpicture: data.avatar || undefined,
+                        banned: data.banned,
+                        location: data.location,
+                        joindate: data.created_at
+                    });
                 });
 
-                RDB.hset('username:uid', username, uid);
-                RDB.hset('userslug:uid', userslug, uid);
-
-                if (email !== undefined) {
-                    RDB.hset('email:uid', email, uid);
-                    User.sendConfirmationEmail(email);
-                }
-
-                RDB.incr('usercount', function(err, count) {
-                    RDB.handle(err);
-
-                    if (typeof io !== 'undefined') {
-                        io.sockets.emit('user.count', {
-                            count: count
-                        });
-                    }
-                });
-
-                RDB.zadd('users:joindate', timestamp, uid);
-                RDB.zadd('users:postcount', 0, uid);
-                RDB.zadd('users:reputation', 0, uid);
-
-                userSearch.index(username, uid);
-
-                if (typeof io !== 'undefined') {
-                    io.sockets.emit('user.latest', {
-                        userslug: userslug,
-                        username: username
-                    });
-                }
-
-                if (password !== undefined) {
-                    User.hashPassword(password, function(err, hash) {
-                        User.setUserField(uid, 'password', hash);
-                        callback(null, uid);
-                    });
-                } else {
-                    callback(null, uid);
-                }
-            });
+            })
         });
     },
 
@@ -248,7 +206,7 @@ module.exports = {
                 + " USER_MEMBERSHIP_LEVEL as level, USER_REGISTERED_ON as created_at,"
                 + " USER_IS_APPROVED as approved, USER_IS_banned as banned",
             // from
-            "ubbt_USERS",
+            "ubbPrefixUSERS",
             {
                 queryCallback: function(err, rows, fields, lastOne){
                     if (err) throw err;
@@ -287,7 +245,7 @@ module.exports = {
                 + " USER_TOTAL_RATES as total_rates, USER_BIRTHDAY as birthday,"
                 + " USER_UNVERIFIED_EMAIL as unverified_email",
             // from
-            "ubbt_USER_PROFILE",
+            "ubbPrefixUSER_PROFILE",
             {
                 queryCallback: function(err, rows, fields, lastOne){
                     if (err) throw err;
@@ -318,7 +276,7 @@ module.exports = {
             // select
             "CATEGORY_ID as oid, CATEGORY_TITLE as name, CATEGORY_DESCRIPTION as description",
             // from
-            "ubbt_CATEGORIES",
+            "ubbPrefixCATEGORIES",
             {
                 queryCallback: function(err, rows, fields, lastOne){
                     if (err) throw err;
@@ -352,7 +310,7 @@ module.exports = {
             "FORUM_ID as id, FORUM_TITLE as title, FORUM_DESCRIPTION as description,"
                 + " CATEGORY_ID as category_id, FORUM_CREATED_ON as created_at",
             // from
-            "ubbt_FORUMS",
+            "ubbPrefixFORUMS",
             {
                 queryCallback: function(err, rows, fields, lastOne){
                     if (err) throw err;
@@ -382,7 +340,7 @@ module.exports = {
             + " USER_ID as user_id, POST_DEFAULT_BODY as default_body,",
             + " POST_MARKUP_TYPE as markup, POST_IS_APPROVED as approved",
             // from
-            "ubbt_POSTS",
+            "ubbPrefixPOSTS",
             {
                 queryCallback: function(err, rows, fields, lastOne){
                     if (err) throw err;
@@ -401,22 +359,27 @@ module.exports = {
         );
     },
 
-    ubbFilterUsers: function(){
-        this.ubbGetBannedUsers(function(banned){
-        });
+    // check if valid url
+    _isValidUrl: function(url){
+
+        var pattern = new RegExp(
+            + "^(https?:\\/\\/)?"
+            + "((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|"
+            + "((\\d{1,3}\\.){3}\\d{1,3}))"
+            + "(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*"
+            + "(\\?[;&a-z\\d%_.~+=-]*)?"
+            + "(\\#[-a-z\\d_]*)?$", "i");
+
+        if(!pattern.test(url)) {
+            return false;
+        } else {
+            return true;
+        }
     },
 
-    ubbGetBannedUsers: function(cb) {
-        var banned = {};
-        this.ubbq("SELECT * FROM " + ubbPrefix + "BANNED_USERS;", function(err, rows){
-            if (err) throw err;
-
-            rows.forEach(function(row){
-                banned[row.USER_ID] = row.BAN_REASON || "UNKNOWN";
-            });
-
-            if (typeof cb == "function")
-                cb(banned);
-        });
+    // a helper method to generate temporary passwords
+    _genRandPwd: function(len, chars) {
+        var index = (Math.random() * (chars.length - 1)).toFixed(0);
+        return len > 0 ? chars[index] + this._genRandPwd(len - 1, chars) : '';
     }
 };
