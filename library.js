@@ -1,22 +1,23 @@
 var
 
-    // NodeBB Objects
+// NodeBB Objects
     Categories = module.parent.require('./categories'),
     User = module.parent.require('./user'),
     Topic = module.parent.require('./topics'),
     Posts = module.parent.require('./posts'),
 
-    // some useful modules
-    // mysql to talk to ubb db
+// some useful modules
+// mysql to talk to ubb db
     mysql = require("mysql"),
-    // exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
+// exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
     htmlToMarkdown = require("html-md"),
-    // I'm lazy
+// I'm lazy
     $ = require("jquery"),
-    // you know what that is if you're looking at this source
+// you know what these are if you're looking at this source
     fs = require("fs"),
+    http = require("http"),
 
-    //todo move this to a config file
+// todo: move this to a config file
     ubbConfig =  {
         host: "127.0.0.1",
         user: "ubb_user",
@@ -25,9 +26,9 @@ var
     },
     ubbPrefix = "ubbt_",
 
-    // mysql connection to ubb database
+// mysql connection to ubb database
     ubbConnection = mysql.createConnection(ubbConfig),
-    // ubbData in memory for a little while
+// ubbData in memory for a little while
     ubbData = {
         users: [],
         usersProfiles: [],
@@ -36,7 +37,7 @@ var
         posts: []
     },
 
-    // ubb to nbb map in memory
+// ubb to nbb map in memory
     MAP = {
         categories: {},
         users: {},
@@ -68,7 +69,7 @@ module.exports = {
                 // save a reference from the old category to the new one
                 MAP.categories[data.id] = category;
 
-                console.log("[ubb][" + data.id + "]--->[nbb][/category/" + category.cid + "/" + category.slug);
+                console.log("[ubbmigrator] [ubb][" + data.id + "]--->[nbb][/category/" + category.cid + "/" + category.slug);
             })
         });
     },
@@ -80,20 +81,28 @@ module.exports = {
         var chars = '!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890';
 
         // iterate over each
-        Object.keys(users).forEach(function(key, ci){
+        Object.keys(users).forEach(function(key, ui){
             // get the data from db
             var data = users[key];
 
             // just being safe
-            data.email = data.email ? data.email.toLowerCase() : "";
             data.username = data.username ? data.username.toLowerCase() : "";
+
+            // lower case the email as well, but I won't use it for the creation of the user
+            // NodeBB tries to send an email at the creation of the user account
+            // so after looking at nodebb source, it looks like i can get away with setting some
+            // email that doesn't work, but still validates, then after I set it back to the original email
+            data.realEmail = data.email ? data.email.toLowerCase() : "";
+            // todo: i should probably move that to a config, just in case you don't want to do that
+            // also that will mess up the gravatar generated url, so I fix that at the end of each iteration, keep scrolling
+            data.email = "unique.email.that.doesnt.work." + ui + "@but.still.validates.nodebb.check.so";
 
             // I don't know about you about I noticed a lot my users have incomplete urls
             data.avatar = self._isValidUrl(data.avatar) ? data.avatar : undefined;
             data.homepage = self._isValidUrl(data.homepage) ? data.homepage : undefined;
 
             // generate a temp password, don't worry i'll add the clear text to the map so you can email it to the user
-            // todo maybe make these 2 params as configs
+            // todo: maybe make these 2 params as configs
             data.password = this._genRandPwd(13, chars);
 
             User.create(data.username, data.password, data.email, function(err, uid){
@@ -101,21 +110,54 @@ module.exports = {
 
                 User.getUserField(uid, "userslug", function(err, userslug){
 
-                    // todo take out the password out of the log
-                    console.log("[ubb][" + data.id + "]--->[nbb][/user/" + userslug + "?udi=" + uid + "&pwd=" + data.password);
+                    data.userslug = userslug;
+
+                    // todo: take out the password out of the log
+                    console.log("[ubbmigrator] [ubb][" + data.id + "]--->[nbb][/user/" + userslug + "?udi=" + uid + "&pwd=" + data.password);
 
                     // set some of the fields got from the ubb
                     User.setUserFields(uid, {
+                        // preseve the signature and homepage if there is any
                         signature: htmlToMarkdown(data.signature),
                         website: data.homepage || "",
-                        picture: data.avatar || undefined,
-                        gravatarpicture: data.avatar || undefined,
+                        // if that user is banned, we would still h/im/er to be
                         banned: data.banned,
-                        location: data.location,
-                        joindate: data.created_at
+                        // reset the location
+                        location: data.location || "",
+                        // preserse the  joindate, luckily here, ubb uses timestamps too
+                        joindate: data.created_at,
+                        // now I set the real email back in
+                        email: data.realEmail
                     });
                 });
 
+                // some sanity async checks
+                self._checkUrlResponse(data.homepage, function(result){
+                    // if it's not good
+                    if (!result) {
+                        User.setUserField(uid, "website", "", function(){
+                            console.log("[ubbmigrator] User[" + uid + "].website[" + data.homepage + "] reset to ");
+                        });
+
+                    }
+                });
+                self._checkUrlResponse(data.avatar, function(result){
+                    var picUrl;
+                    // if it's not good
+                    if (!result) {
+                        picUrl = "";
+                    } else {
+                        // NodeBB creates an avatar url so, if the user have an older one and still good, we keep it
+                        // if not we try to create a gravatar from the realEmail not the fake one we created on top
+                        picUrl = User.createGravatarURLFromEmail(data.realEmail);
+                    }
+                    User.setUserField(uid, "picture", picUrl, function(){
+                        console.log("[ubbmigrator] User[" + uid + "].picture:[" + data.avatar + "] reset to " + picUrl);
+                    });
+                    User.setUserField(uid, "gravatarpicture", picUrl, function(){
+                        console.log("[ubbmigrator] User[" + uid + "].gravatarpicture:[" + data.avatar + "] reset to " + picUrl);
+                    });
+                });
             })
         });
     },
@@ -126,7 +168,7 @@ module.exports = {
         cb = typeof cb == "function" ? cb : function(){};
         var self = this;
 
-        console.log("ubbConnect Called; ubbConnected: " + self.ubbConnected);
+        console.log("[ubbmigrator] ubbConnect Called; ubbConnected: " + self.ubbConnected);
 
         if (!self.ubbConnected) {
             ubbConnection.connect(function(err){
@@ -214,7 +256,7 @@ module.exports = {
 
 
                     if (lastOne) {
-                        console.log("USERS: " + ubbData.users.length);
+                        console.log("[ubbmigrator] USERS: " + ubbData.users.length);
                         ubbData.users = self.convertListToMap(ubbData.users, "id");
                         self.ubbGetUsersProfiles(ubbData.users);
                     }
@@ -252,16 +294,16 @@ module.exports = {
                     ubbData.usersProfiles = ubbData.usersProfiles.concat(rows);
 
                     if (lastOne) {
-                        console.log("USERS PROFILE: " + ubbData.usersProfiles.length);
+                        console.log("[ubbmigrator] USERS PROFILE: " + ubbData.usersProfiles.length);
                         ubbData.usersProfiles.forEach(function(profile){
                             ubbData.users[profile.id] = $.extend({}, profile, ubbData.users[profile.id]);
                         });
 
                         self.writeJSONtoFile("tmp/ubb/users.json", ubbData.users, function(err){
                             if(!err)
-                                console.log("USERS-SAVED");
+                                console.log("[ubbmigrator] USERS-SAVED");
                             else
-                                console.log("USERS-SAVING ERROR: " + err);
+                                console.log("[ubbmigrator] USERS-SAVING ERROR: " + err);
                         })
                     }
                 }
@@ -282,12 +324,12 @@ module.exports = {
                     if (err) throw err;
                     ubbData.categories = ubbData.categories.concat(rows);
                     if (lastOne) {
-                        console.log("CATEGORIES: " + ubbData.categories.length);
+                        console.log("[ubbmigrator] CATEGORIES: " + ubbData.categories.length);
                         self.writeJSONtoFile("tmp/ubb/categories.json", ubbData.categories, function(err){
                             if(!err)
-                                console.log("CATEGORIES-SAVED");
+                                console.log("[ubbmigrator] CATEGORIES-SAVED");
                             else
-                                console.log("CATEGORIES-SAVING ERROR: " + err);
+                                console.log("[ubbmigrator] CATEGORIES-SAVING ERROR: " + err);
                         })
                     }
 
@@ -316,12 +358,12 @@ module.exports = {
                     if (err) throw err;
                     ubbData.forums = ubbData.forums.concat(rows);
                     if (lastOne) {
-                        console.log("FORUMS: " + ubbData.forums.length);
+                        console.log("[ubbmigrator] FORUMS: " + ubbData.forums.length);
                         self.writeJSONtoFile("tmp/ubb/forums.json", ubbData.forums, function(err){
                             if(!err)
-                                console.log("FORUMS-SAVED");
+                                console.log("[ubbmigrator] FORUMS-SAVED");
                             else
-                                console.log("FORUMS-SAVING ERROR: " + err);
+                                console.log("[ubbmigrator] FORUMS-SAVING ERROR: " + err);
                         })
                     }
                 }
@@ -346,12 +388,12 @@ module.exports = {
                     if (err) throw err;
                     ubbData.posts = ubbData.posts.concat(rows);
                     if (lastOne) {
-                        console.log("POSTS: " + ubbData.posts.length);
+                        console.log("[ubbmigrator] POSTS: " + ubbData.posts.length);
                         self.writeJSONtoFile("tmp/ubb/posts.json", ubbData.posts, function(err){
                             if(!err)
-                                console.log("POSTS-SAVED");
+                                console.log("[ubbmigrator] POSTS-SAVED");
                             else
-                                console.log("POSTS-SAVING ERROR: " + err);
+                                console.log("[ubbmigrator] POSTS-SAVING ERROR: " + err);
                         })
                     }
                 }
@@ -364,11 +406,11 @@ module.exports = {
 
         var pattern = new RegExp(
             + "^(https?:\\/\\/)?"
-            + "((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|"
-            + "((\\d{1,3}\\.){3}\\d{1,3}))"
-            + "(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*"
-            + "(\\?[;&a-z\\d%_.~+=-]*)?"
-            + "(\\#[-a-z\\d_]*)?$", "i");
+                + "((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|"
+                + "((\\d{1,3}\\.){3}\\d{1,3}))"
+                + "(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*"
+                + "(\\?[;&a-z\\d%_.~+=-]*)?"
+                + "(\\#[-a-z\\d_]*)?$", "i");
 
         if(!pattern.test(url)) {
             return false;
@@ -381,5 +423,17 @@ module.exports = {
     _genRandPwd: function(len, chars) {
         var index = (Math.random() * (chars.length - 1)).toFixed(0);
         return len > 0 ? chars[index] + this._genRandPwd(len - 1, chars) : '';
+    },
+
+    _checkUrlResponse: function(url, callback) {
+        http.get(url, function(res) {
+            res.on("data", function(c){});
+            res.on("end", function() {
+                callback(true);
+            });
+            res.on("error", function() {
+                callback(false)
+            });
+        });
     }
 };
