@@ -23,25 +23,24 @@
 var
 
 // nbb Objects
-//    Categories = module.parent.require('./categories'),
-//    User = module.parent.require('./user'),
-//    Topics = module.parent.require('./topics'),
-//    Posts = module.parent.require('./posts'),
 
+//  Categories = module.parent.require('./categories'),
+//  User = module.parent.require('./user'),
+//  Topics = module.parent.require('./topics'),
+//  Posts = module.parent.require('./posts'),
     Categories = {},
     User = {},
     Topics = {},
     Posts = {},
-
 // some useful modules
 // mysql to talk to ubb db
     mysql = require("mysql"),
-// exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
+    // exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
     htmlToMarkdown = require("html-md"),
-// I'm lazy
+    // I'm lazy
     $ = require("jquery"),
     async = require("async"),
-// you know what these are if you're looking at this source
+    // you know what these are if you're looking at this source
     fs = require("fs"),
     http = require("http");
 
@@ -403,6 +402,8 @@ module.exports = {
     nbbSaveTopics: function(next){
         // topics chez nbb are forums chez ubb
         var topics = require(this.config.ubbTmpFiles.forums);
+        var posts = require(this.config.ubbTmpFiles.posts);
+
         var self = this;
         var _topics = Object.keys(topics);
 
@@ -411,17 +412,28 @@ module.exports = {
             // get the data from db
             var data = topics[key];
 
-            var categoryId = ""
-            var uid = "";
-            var content = "";
-            var title = "";
+            var categoryId = self.ubbToNbbMap.categories[data.forumId].cid;
+            var uid = self.ubbToNbbMap.users[data.userId].uid;
+            var content = htmlToMarkdown(posts[data.postId].body);
+            var title = data.title ? data.subject[0].toUpperCase() + data.title.substr(1) : "Untitled";
 
-            Topics.create(data, function(err, topic){
+            Topics.create(uid, title, content, categoryId, function(err, ret){
                 if (err) throw err;
-                // save a reference from the old category to the new one
-                self.ubbToNbbMap.topics[data.ofid] = topic;
 
-                console.log("[ubbmigrator] [ubb][" + data.ofid + "]--->[nbb][/topic/" + topic.tid + "/" + topic.slug);
+                ret.topicData._redirect = {
+                    from: "[YOUR_UBB_PATH]/ubbthreads.php/topics/" + data.ofid + "/*",
+                    to: "[YOUR_NBB_PATH]/topic/" + ret.topicData.tid + "/" + ret.topicData.slug
+                };
+
+                ret.topicData = $.extend({}, ret.topicData, {timestamp: data.datetime, viewcount: data.views, pinned: data.pinned});
+
+                Topics.setTopicField(ret.topicData.tid, "timestamp", data.datetime);
+                Topics.setTopicField(ret.topicData.tid, "viewcount", data.views);
+                Topics.setTopicField(ret.topicData.tid, "pinned", data.pinned);
+
+                // save a reference from the old category to the new one
+                self.ubbToNbbMap.topics[data.ofid] = ret.topicData;
+                console.log("[ubbmigrator][redirect]" + ret.topicData._redirect.from + " ---> " + ret.topicData._redirect.to);
             });
         });
 
@@ -439,32 +451,51 @@ module.exports = {
 
     // save the UBB posts to nbb's redis
     nbbSavePosts: function(next){
-        var posts = require("./tmp/ubb/posts.json");
+        var posts = require(this.config.ubbTmpFiles.posts);
+
         var self = this;
         var _posts = Object.keys(posts);
 
         // iterate over each
         _posts.forEach(function(key, pi){
             // get the data from db
-            var data = topics[key];
+            var data = posts[key];
 
-            Posts.create(data, function(err, post){
+            var tid = self.ubbToNbbMap.topics[data.topicId].tid;
+            var uid = self.ubbToNbbMap.users[data.userId].uid;
+            var content = htmlToMarkdown(data.body);
+
+            // if this is a topic post, used for the topic's content
+            if (data.parent == 0) return;
+
+            Posts.create(uid, tid, content, function(err, postData){
                 if (err) throw err;
-                // save a reference from the old category to the new one
-                self.ubbToNbbMap.topics[data.opid] = post;
 
-                console.log("[ubbmigrator] [ubb][" + data.opid + "]--->[nbb][/post/" + post.pid + "/" + post.slug);
-            })
+                postData._redirect = {
+                    from: "[YOUR_UBB_PATH]/ubbthreads.php/topics/" + data.topicId + "/*#Post" + data.opid,
+                    to: "[YOUR_NBB_PATH]/topic/" + tid + "#" + postData.pid
+                };
+
+                var relativeTime = new Date(data.datetime).toISOString();
+                postData = $.extend({}, ret.topicData, {timestamp: data.datetime, relativeTime: relativeTime});
+
+                Posts.setPostField(ret.topicData.tid, "timestamp", data.datetime);
+                Posts.setPostField(ret.topicData.tid, "relativeTime", relativeTime);
+
+                // save a reference from the old category to the new one
+                self.ubbToNbbMap.posts[data.opid] = postData;
+                console.log("[ubbmigrator][redirect]" + postData._redirect.from + " ---> " + postData._redirect.to);
+            });
         });
 
-        this.slowWriteJSONtoFile(this.config.nbbTmpFiles.topics, this.ubbToNbbMap.topics, function(err){
+        this.slowWriteJSONtoFile(this.config.nbbTmpFiles.posts, this.ubbToNbbMap.posts, function(err){
             if(!err) {
-                console.log("[ubbmigrator] " + _posts.length + " NBB Topics saved, MAP in " + self.config.nbbTmpFiles.topics);
+                console.log("[ubbmigrator] " + _posts.length + " NBB Posts saved, MAP in " + self.config.nbbTmpFiles.posts);
 
                 if (typeof next == "function")
                     next();
             } else {
-                console.log("[ubbmigrator][ERROR] Could not write NBB Topics " + err);
+                console.log("[ubbmigrator][ERROR] Could not write NBB Posts " + err);
             }
         });
     },
@@ -583,7 +614,7 @@ module.exports = {
                 + " TOPIC_SUBJECT as subject, TOPIC_REPLIES as replies,"
                 + " TOPIC_TOTAL_RATES as totalRates, TOPIC_RATING as rating,"
                 + " TOPIC_CREATED_TIME as datetime, TOPIC_IS_APPROVED as approved,"
-                + " TOPIC_STATUS as status, TOPIC_IS_APPROVED as approved"
+                + " TOPIC_STATUS as status, TOPIC_IS_STICKY as pinned"
                 + " FROM " + self.config.ubbTablePrefix + "TOPICS"
                 + (self.config.ubbqTestLimit.topics ? " LIMIT " + self.config.ubbqTestLimit.topics : ""),
 
@@ -608,7 +639,7 @@ module.exports = {
     ubbGetPosts: function(next) {
         var self = this;
         this.ubbq(
-            "SELECT POST_ID as poid, POST_PARENT_ID as parent, POST_PARENT_USER_ID as parentUserId, TOPIC_ID as topicId,"
+            "SELECT POST_ID as opid, POST_PARENT_ID as parent, POST_PARENT_USER_ID as parentUserId, TOPIC_ID as topicId,"
                 + " POST_POSTED_TIME as datetime, POST_SUBJECT as subject,"
                 + " POST_BODY as body, POST_DEFAULT_BODY as defaultBody, USER_ID as userId,"
                 + " POST_MARKUP_TYPE as markup, POST_IS_APPROVED as approved"
