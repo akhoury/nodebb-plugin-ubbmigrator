@@ -59,28 +59,52 @@ module.exports = {
                 self.init(config, next);
             },
             function(next){
-                self.ubbGetUsers(next);
+                if (self.config.skip.users)
+                    next();
+                else
+                    self.ubbGetUsers(next);
             },
             function(next){
-                self.ubbGetCategories(next);
+                if (self.config.skip.categories)
+                    next();
+                else
+                    self.ubbGetCategories(next);
             },
             function(next){
-                self.ubbGetForums(next);
+                if (self.config.skip.topics)
+                    next();
+                else
+                    self.ubbGetForums(next);
             },
             function(next){
-                self.ubbGetPosts();
+                if (self.config.skip.posts)
+                    next();
+                else
+                    self.ubbGetPosts();
             },
             function(next){
-                //self.nbbSaveCategories();
+                if (self.config.skip.users)
+                    next();
+                else
+                    self.nbbSaveUsers();
             },
             function(next){
-                //self.nbbSaveUsers();
+                if (self.config.skip.categories)
+                    next();
+                else
+                    self.nbbSaveCategories();
             },
             function(next){
-                //self.nbbSaveTopics();
+                if (self.config.skip.topics)
+                    next();
+                else
+                    self.nbbSaveTopics();
             },
             function(next){
-                //self.nbbSavePosts();
+                if (self.config.skip.posts)
+                    next();
+                else
+                    self.nbbSavePosts();
             },
             function(next){
                 self.ubbDisconnect();
@@ -120,7 +144,17 @@ module.exports = {
                 categories: null,
                 forums: null,
                 posts: null
-            }
+            },
+
+            skip: {
+                users: false,
+                categories: false,
+                topics: false,
+                posts: false
+            },
+
+            dontSaveToNbb: false
+
         }, config);
 
         // create a map from ubb ids to new nbb data
@@ -230,7 +264,7 @@ module.exports = {
             data.realEmail = data.email ? data.email.toLowerCase() : "";
             // todo: i should probably move that to a config, just in case you don't want to do that
             // also that will mess up the gravatar generated url, so I fix that at the end of each iteration, keep scrolling
-            data.email = "unique.email.that.doesnt.work." + ui + "@but.still.validates.nbb.check.so";
+            data.email = "unique.email.that.doesnt.work." + ui + "@but.still.validates.nbb.check";
 
             // I don't know about you about I noticed a lot my users have incomplete urls
             data.avatar = self._isValidUrl(data.avatar) ? data.avatar : undefined;
