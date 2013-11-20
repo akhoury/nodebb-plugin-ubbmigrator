@@ -9,7 +9,6 @@
 // todo user ranking formula to preserve the karma
 // todo write up the posts from ubb migrator
 // todo write up the topics to nbb migrator
-// todo write up the posts to nbb migrator
 
 // todo generate my nginx rewrite rules
 // todo still, make sure the [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars
@@ -71,42 +70,65 @@ module.exports = {
                     self.ubbGetCategories(next);
             },
             function(next){
-                if (self.config.skip.topics)
+                if (self.config.skip.forums)
                     next();
                 else
                     self.ubbGetForums(next);
             },
             function(next){
-                if (self.config.skip.posts)
-                    next();
-                else
-                    self.ubbGetPosts();
-            },
-            function(next){
-                if (self.config.skip.users)
-                    next();
-                else
-                    self.nbbSaveUsers();
-            },
-            function(next){
-                if (self.config.skip.categories)
-                    next();
-                else
-                    self.nbbSaveCategories();
-            },
-            function(next){
                 if (self.config.skip.topics)
                     next();
                 else
-                    self.nbbSaveTopics();
+                    self.ubbGetTopics(next);
             },
             function(next){
                 if (self.config.skip.posts)
                     next();
                 else
-                    self.nbbSavePosts();
+                    self.ubbGetPosts(next);
             },
             function(next){
+                if (!self.config.dontSaveToNbb) {
+                    if (self.config.skip.users)
+                        next();
+                    else
+                        self.nbbSaveUsers(next);
+                } else {
+                    next();
+                }
+            },
+            function(next){
+                if (!self.config.dontSaveToNbb) {
+                    // ubb.forums ===> nbb.categories
+                    if (self.config.skip.forums)
+                        next();
+                    else
+                        self.nbbSaveCategories(next);
+                } else {
+                    next();
+                }
+            },
+            function(next){
+                if (!self.config.dontSaveToNbb) {
+                    if (self.config.skip.topics)
+                        next();
+                    else
+                        self.nbbSaveTopics(next);
+                } else {
+                    next();
+                }
+            },
+            function(next){
+                if (!self.config.dontSaveToNbb) {
+                    if (self.config.skip.posts)
+                        next();
+                    else
+                        self.nbbSavePosts(next);
+                } else {
+                    next();
+                }
+            },
+            function(){
                 self.ubbDisconnect();
                 process.exit(1);
             }
@@ -124,31 +146,35 @@ module.exports = {
             ubbTablePrefix: "ubbt_",
 
             ubbTmpFiles: {
-                users: "tmp/ubb/users.json",
-                categories: "tmp/ubb/categories.json",
-                forums: "tmp/ubb/forums.json",
-                posts: "tmp/ubb/posts.json"
+                users: "./tmp/ubb/users.json",
+                categories: "./tmp/ubb/categories.json",
+                forums: "./tmp/ubb/forums.json",
+                topics: "./tmp/ubb/topics.json",
+                posts: "./tmp/ubb/posts.json"
             },
 
             nbbTmpFiles: {
-                users: "tmp/nbb/users.json",
-                categories: "tmp/nbb/categories.json",
-                topics: "tmp/nbb/topics.json",
-                posts: "tmp/nbb/posts.json"
+                users: "./tmp/nbb/users.json",
+                // forums become categories in NBB, and I loose UBB categories
+                categories: "./tmp/nbb/categories.json",
+                topics: "./tmp/nbb/topics.json",
+                posts: "./tmp/nbb/posts.json"
             },
 
-            ubbToNbbMapFile: "tmp/ubbToNbbMap.json",
+            ubbToNbbMapFile: "./tmp/ubbToNbbMap.json",
 
             ubbqTestLimit: {
                 users: null,
                 categories: null,
                 forums: null,
+                topics: null,
                 posts: null
             },
 
             skip: {
                 users: false,
                 categories: false,
+                forums: false,
                 topics: false,
                 posts: false
             },
@@ -161,8 +187,8 @@ module.exports = {
         // useful for saving clear temp passwords for users
         // and creating ReWriteRules
         this.ubbToNbbMap = {
-            categories: {},
             users: {},
+            categories: {},
             topics: {},
             posts: {}
         };
@@ -173,6 +199,7 @@ module.exports = {
             usersProfiles: [],
             categories: [],
             forums: [],
+            topics: [],
             posts: []
         };
 
@@ -187,52 +214,6 @@ module.exports = {
 
     },
     cleanUp: function(){},
-
-
-    // save the UBB categories to nbb's redis
-    nbbSaveCategories: function(next){
-        var categories = require(this.config.ubbTmpFiles.categories);
-        var self = this;
-        var _categories = Object.keys(categories);
-
-        // iterate over each
-        _categories.forEach(function(key, ci){
-            // get the data from db
-            var data = categories[key];
-
-            // set some defaults since i don't have them
-            data.icon = "icon-comment";
-            data.blockclass = "category-blue";
-
-            // order based on index i guess
-            data.order = ci + 1;
-
-            Categories.create(data, function(err, category) {
-                if (err) throw err;
-
-                // you will need these to create "RewriteRules", i'll let you figure that out
-                category._redirect = {
-                    from: "[YOUR_UBB_PATH]/ubbthreads.php/category/" + data.ocid + "/*",
-                    to: "[YOUR_NBB_PATH]/category/" + category.cid + "/" + category.slug
-                };
-
-                // save a reference from the old category to the new one
-                self.ubbToNbbMap.categories[data.ocid] = category;
-
-                console.log("[ubbmigrator][redirect]" + category._redirect.from + " ---> " + category._redirect.to);
-            })
-        });
-
-        this.slowWriteJSONtoFile(this.config.nbbTmpFiles.categories, this.ubbToNbbMap.categories, function(err){
-            if(!err)
-                console.log("[ubbmigrator] " + _categories.length + " NBB Categories saved, MAP in " + self.config.nbbTmpFiles.categories);
-            else
-                console.log("[ubbmigrator][ERROR] Could not write NBB Categories " + err);
-        });
-
-        if (typeof next == "function")
-            next();
-    },
 
     // save the UBB users to nbb's redis
     nbbSaveUsers: function(next) {
@@ -273,7 +254,7 @@ module.exports = {
 
             // generate a temp password, don't worry i'll add the clear text to the map so you can email it to the user
             // todo: maybe make these 2 params as configs
-            data.clearPassword = this._genRandPwd(13, chars);
+            data.clearPassword = self._genRandPwd(13, chars);
 
             User.create(data.username, data.clearPassword, data.email, function(err, uid){
                 if (err) throw err;
@@ -351,16 +332,72 @@ module.exports = {
         });
 
         this.slowWriteJSONtoFile(this.config.nbbTmpFiles.users, this.ubbToNbbMap.users, function(err){
-            if(!err)
+            if(!err) {
                 console.log("[ubbmigrator] " + _users.length + " NBB Users saved, MAP in " + self.config.nbbTmpFiles.users);
-            else
-                console.log("[ubbmigrator][ERROR] Could not write NBB Users " + err);
-        });
 
-        if (typeof next == "function")
-            next();
+                if (typeof next == "function")
+                    next();
+
+            } else {
+                console.log("[ubbmigrator][ERROR] Could not write NBB Users " + err);
+            }
+        });
     },
 
+
+
+    // save the UBB categories to nbb's redis
+    // ubb.forums == nbb.categories
+    nbbSaveCategories: function(next){
+        var categories = require(this.config.ubbTmpFiles.forums);
+        var self = this;
+        var _categories = Object.keys(categories);
+
+        // iterate over each
+        _categories.forEach(function(key, ci){
+            // get the data from db
+            var data = categories[key];
+
+            // set some defaults since i don't have them
+            data.icon = "icon-comment";
+            data.blockclass = "category-blue";
+
+            // order based on index i guess
+            data.order = ci + 1;
+
+            Categories.create(data, function(err, category) {
+                if (err) throw err;
+
+                // you will need these to create "RewriteRules", i'll let you figure that out
+                category._redirect = {
+                    from: "[YOUR_UBB_PATH]/ubbthreads.php/forums/" + data.ofid + "/*",
+                    to: "[YOUR_NBB_PATH]/category/" + category.cid + "/" + category.slug
+                };
+
+                // save a reference from the old category to the new one
+                self.ubbToNbbMap.categories[data.ofid] = category;
+
+                console.log("[ubbmigrator][redirect]" + category._redirect.from + " ---> " + category._redirect.to);
+
+                // is this the last one?
+                if (ci == _categories.length) {
+                    if (typeof next == "function")
+                        next();
+                }
+            })
+        });
+
+        this.slowWriteJSONtoFile(this.config.nbbTmpFiles.categories, this.ubbToNbbMap.categories, function(err){
+            if(!err) {
+                console.log("[ubbmigrator] " + _categories.length + " NBB Categories saved, MAP in " + self.config.nbbTmpFiles.categories);
+
+                if (typeof next == "function")
+                    next();
+            } else {
+                console.log("[ubbmigrator][ERROR] Could not write NBB Categories " + err);
+            }
+        });
+    },
 
     // save the UBB topics to nbb's redis
     nbbSaveTopics: function(next){
@@ -374,6 +411,11 @@ module.exports = {
             // get the data from db
             var data = topics[key];
 
+            var categoryId = ""
+            var uid = "";
+            var content = "";
+            var title = "";
+
             Topics.create(data, function(err, topic){
                 if (err) throw err;
                 // save a reference from the old category to the new one
@@ -384,14 +426,15 @@ module.exports = {
         });
 
         this.slowWriteJSONtoFile(this.config.nbbTmpFiles.topics, this.ubbToNbbMap.topics, function(err){
-            if(!err)
+            if(!err) {
                 console.log("[ubbmigrator] " + _topics.length + " NBB Topics saved, MAP in " + self.config.nbbTmpFiles.topics);
-            else
-                console.log("[ubbmigrator][ERROR] Could not write NBB Topics " + err);
-        });
 
-        if (typeof next == "function")
-            next();
+                if (typeof next == "function")
+                    next();
+            } else {
+                console.log("[ubbmigrator][ERROR] Could not write NBB Topics " + err);
+            }
+        });
     },
 
     // save the UBB posts to nbb's redis
@@ -415,14 +458,15 @@ module.exports = {
         });
 
         this.slowWriteJSONtoFile(this.config.nbbTmpFiles.topics, this.ubbToNbbMap.topics, function(err){
-            if(!err)
+            if(!err) {
                 console.log("[ubbmigrator] " + _posts.length + " NBB Topics saved, MAP in " + self.config.nbbTmpFiles.topics);
-            else
-                console.log("[ubbmigrator][ERROR] Could not write NBB Topics " + err);
-        });
 
-        if (typeof next == "function")
-            next();
+                if (typeof next == "function")
+                    next();
+            } else {
+                console.log("[ubbmigrator][ERROR] Could not write NBB Topics " + err);
+            }
+        });
     },
 
     // get ubb users
@@ -459,7 +503,7 @@ module.exports = {
             function(err, rows){
                 console.log("[ubbmigrator] UsersProfiles query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.usersProfiles = self.ubbData.usersProfiles.concat(rows);
+                self.ubbData.usersProfiles = rows;
 
                 self.ubbData.usersProfiles.forEach(function(profile){
                     // mergin the userProfiles with users
@@ -489,7 +533,7 @@ module.exports = {
             function(err, rows){
                 console.log("[ubbmigrator] Categories query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.categories = self.ubbData.categories.concat(rows);
+                self.ubbData.categories = self._convertListToMap(rows, "ocid");
 
                 self.slowWriteJSONtoFile(self.config.ubbTmpFiles.categories, self.ubbData.categories, function(err){
                     if(!err)
@@ -505,25 +549,54 @@ module.exports = {
     },
 
     // get ubb forums
-    // aka topics in nbb speak
     ubbGetForums: function(next) {
         var self = this;
         this.ubbq(
             "SELECT FORUM_ID as ofid, FORUM_TITLE as title, FORUM_DESCRIPTION as description,"
-                + " CATEGORY_ID as categoryId, FORUM_CREATED_ON as joindate"
+                + " CATEGORY_ID as categoryId, FORUM_CREATED_ON as datetime"
                 + " FROM " + self.config.ubbTablePrefix + "FORUMS"
                 + (self.config.ubbqTestLimit.forums ? " LIMIT " + self.config.ubbqTestLimit.forums : ""),
 
             function(err, rows){
                 console.log("[ubbmigrator] Forums query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.forums = self.ubbData.forums.concat(rows);
+                self.ubbData.forums = self._convertListToMap(rows, "ofid");
 
                 self.slowWriteJSONtoFile(self.config.ubbTmpFiles.forums, self.ubbData.forums, function(err){
                     if(!err)
                         console.log("[ubbmigrator] " + rows.length + " UBB Forums saved in " + self.config.ubbTmpFiles.forums);
                     else
                         console.log("[ubbmigrator][ERROR] Could not save UBB Forums " + err);
+
+                    if (typeof next == "function")
+                        next();
+                });
+            });
+    },
+
+   // get ubb topics
+    ubbGetTopics: function(next) {
+        var self = this;
+        this.ubbq(
+            "SELECT TOPIC_ID as otid, FORUM_ID as forumId, POST_ID as postId,"
+                + " USER_ID as userId, TOPIC_VIEWS as views,"
+                + " TOPIC_SUBJECT as subject, TOPIC_REPLIES as replies,"
+                + " TOPIC_TOTAL_RATES as totalRates, TOPIC_RATING as rating,"
+                + " TOPIC_CREATED_TIME as datetime, TOPIC_IS_APPROVED as approved,"
+                + " TOPIC_STATUS as status, TOPIC_IS_APPROVED as approved"
+                + " FROM " + self.config.ubbTablePrefix + "TOPICS"
+                + (self.config.ubbqTestLimit.topics ? " LIMIT " + self.config.ubbqTestLimit.topics : ""),
+
+            function(err, rows){
+                console.log("[ubbmigrator] Topics query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
+                if (err) throw err;
+                self.ubbData.topics = self._convertListToMap(rows, "otid");
+
+                self.slowWriteJSONtoFile(self.config.ubbTmpFiles.topics, self.ubbData.topics, function(err){
+                    if(!err)
+                        console.log("[ubbmigrator] " + rows.length + " UBB Topics saved in " + self.config.ubbTmpFiles.topics);
+                    else
+                        console.log("[ubbmigrator][ERROR] Could not save UBB Topics " + err);
 
                     if (typeof next == "function")
                         next();
@@ -545,7 +618,7 @@ module.exports = {
             function(err, rows){
                 console.log("[ubbmigrator] Posts query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.posts = self.ubbData.posts.concat(rows);
+                self.ubbData.posts = self._convertListToMap(rows, "opid");
                 self.slowWriteJSONtoFile(self.config.ubbTmpFiles.posts, self.ubbData.posts, function(err){
                     if(!err)
                         console.log("[ubbmigrator] " + rows.length + " UBB Posts saved in " + self.config.ubbTmpFiles.posts);
