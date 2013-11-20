@@ -212,6 +212,8 @@ module.exports = {
             // get the data from db
             var data = users[key];
 
+            if (!data.joindate) return;
+
             // just being safe
             data.originalUsername = data.username;
             data.username = data.username ? data.username.toLowerCase() : "";
