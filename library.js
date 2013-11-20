@@ -7,8 +7,8 @@
  */
 
 // todo user ranking formula to preserve the karma
-// todo write up the posts from ubb migrator
-// todo write up the topics to nbb migrator
+// todo moderators?
+// todo figure out a way to logically organize the nbb.categories based on ubb.categories + ubb.forums
 
 // todo generate my nginx rewrite rules
 // todo still, make sure the [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars
