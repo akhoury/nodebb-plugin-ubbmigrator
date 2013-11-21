@@ -13,15 +13,17 @@ ubb.migrate({
     // the stuff below for dev purposes, take them out
     // hard limit on the posts since they're huge
     ubbqTestLimit: {
-        posts: 10000
+        users: 1000,// 10000
+        posts: null// 10000
     },
     // skip any of the these from get and put?
     skip: {
         users: false,
-        categories: false,
-        topics: false,
-        posts: false
+        categories: true,
+        forums: true,
+        topics: true,
+        posts: true
     },
     // don't put anything to nbb db
-    dontSaveToNbb: true
+    dontSaveToNbb: false
 });

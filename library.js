@@ -22,25 +22,23 @@
 
 var
 
-// nbb Objects
+// nbb Objects, required, these paths assume that the plugin lives in /NodeBB/node_modules/nodebb-plugin-ubbmigrator
+// todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's working for some reason
+    User = module.parent.require('../../src/user.js'),
+    Topics = module.parent.require('../../src/topics.js'),
+    Posts = module.parent.require('../../src/posts.js'),
+    Categories = module.parent.require('../../src/categories.js'),
+    utils = module.parent.require('../../public/src/utils.js'),
 
-//  Categories = module.parent.require('./categories'),
-//  User = module.parent.require('./user'),
-//  Topics = module.parent.require('./topics'),
-//  Posts = module.parent.require('./posts'),
-    Categories = {},
-    User = {},
-    Topics = {},
-    Posts = {},
 // some useful modules
 // mysql to talk to ubb db
     mysql = require("mysql"),
-    // exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
+// exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
     htmlToMarkdown = require("html-md"),
-    // I'm lazy
+// I'm lazy
     $ = require("jquery"),
     async = require("async"),
-    // you know what these are if you're looking at this source
+// you know what these are if you're looking at this source
     fs = require("fs"),
     http = require("http");
 
@@ -189,7 +187,8 @@ module.exports = {
             users: {},
             categories: {},
             topics: {},
-            posts: {}
+            posts: {},
+            skippedUsers: {}
         };
 
         // in memory ubbData lists
@@ -214,6 +213,40 @@ module.exports = {
     },
     cleanUp: function(){},
 
+    _makeValidNbbUsername: function(data){
+        var self = this;
+
+        data.originalUsername = data.username;
+        data.username = data.username ? self.stripFromSpecialChars(data.username.toLowerCase()) : "";
+
+        var userslug = utils.slugify(data.username || "");
+
+        // if it's invalid by NodeBB's rules, let me try try to save it
+        if (!utils.isUserNameValid(data.username) || !userslug) {
+            console.log("username: " + data.username + " invalid, trying the user's display name...");
+            userslug = utils.slugify(data.userDisplayName || "");
+            if (!utils.isUserNameValid(data.userDisplayName)) {
+                console.log("userDisplayName: " + data.userDisplayName + " invalid attempting to clean it.");
+                data.userDisplayNameCleaned = self.stripFromSpecialChars(data.userDisplayName);
+                console.log("userDisplayName: " + data.userDisplayName + " stripped to: " + data.userDisplayNameCleaned);
+            } else {
+                data.userDisplayNameCleaned = data.userDisplayName;
+            }
+            if (!utils.isUserNameValid(data.userDisplayNameCleaned) || !userslug) {
+                console.log("userDisplayName: " + data.userDisplayNameCleaned + " still invalid, skipping ...");
+                this.ubbToNbbMap.skippedUsers[data.ouid] = data;
+                data.usernameValid = false;
+            } else {
+                data.usernameValid = true;
+                data.username = data.userDisplayNameCleaned;
+            }
+        } else {
+            data.usernameValid = true;
+        }
+
+        return data;
+    },
+
     // save the UBB users to nbb's redis
     nbbSaveUsers: function(next) {
         var self = this;
@@ -226,13 +259,14 @@ module.exports = {
             // get the data from db
             var data = users[key];
 
-            if (!data.joindate) return;
+            if (!data.joindate || !data.username || !data.userDisplayName) return;
 
             // just being safe
-            data.originalUsername = data.username;
-            data.username = data.username ? data.username.toLowerCase() : "";
+            data = self._makeValidNbbUsername(data);
+            if (!data.usernameValid)
+                return;
 
-            // nbb forces signtures to be less than 150 chars
+            // nbb forces signatures to be less than 150 chars
             data.originalSignature = data.signature;
             data.signature = self.truncateStr(data.signature, 150);
             data.signatureMd = htmlToMarkdown(data.signature);
@@ -255,8 +289,26 @@ module.exports = {
             // todo: maybe make these 2 params as configs
             data.clearPassword = self._genRandPwd(13, chars);
 
-            User.create(data.username, data.clearPassword, data.email, function(err, uid){
-                if (err) throw err;
+            console.log("[ubbmigrator] [" + (ui + 1) + "] saving username: " + data.username);
+            User.create(data.username, data.clearPassword, data.email, function(err, uid) {
+                if (err) {
+                    console.log("Error with username: " + data.username + " err: " + err);
+                    if (_users.length - 1 == ui) {
+                        this.slowWriteJSONtoFile(this.config.nbbTmpFiles.users, this.ubbToNbbMap.users, function(err) {
+                            if(!err) {
+                                console.log("[ubbmigrator] " + _users.length + " NBB Users saved, MAP in " + self.config.nbbTmpFiles.users);
+
+                                if (typeof next == "function")
+                                    next();
+
+                            } else {
+                                console.log("[ubbmigrator][ERROR] Could not write NBB Users " + err);
+                            }
+                        });
+                    } else {
+                        return;
+                    }
+                }
 
                 // saving that for the map
                 data.uid = uid;
@@ -283,67 +335,66 @@ module.exports = {
                     // saving that for the map
                     data.email = data.realEmail;
 
-                });
+                    // some sanity async checks
+                    if (data.website) {
+                        self._checkUrlResponse(data.website, function(result){
+                            // if it's not good
+                            if (!result) {
+                                User.setUserField(uid, "website", "", function(){
+                                    console.log("[ubbmigrator] User[" + uid + "].website[" + data.website + "] reset.");
+                                });
+                            }
+                        });
+                    }
 
-                // some sanity async checks
-                if (data.website) {
-                    self._checkUrlResponse(data.website, function(result){
-                        // if it's not good
-                        if (!result) {
-                            User.setUserField(uid, "website", "", function(){
-                                console.log("[ubbmigrator] User[" + uid + "].website[" + data.website + "] reset.");
+                    if (data.avatar) {
+                        self._checkUrlResponse(data.avatar, function(result){
+                            var picUrl;
+
+                            // if it's not good
+                            if (!result) {
+                                // nbb creates an avatar url so, if the user have an older one and still good, we keep it
+                                // if not we try to create a gravatar from the realEmail not the fake one we created on top
+                                picUrl = User.createGravatarURLFromEmail(data.realEmail);
+                            } else {
+                                picUrl = data.avatar;
+                            }
+
+                            User.setUserField(uid, "picture", picUrl, function(){
+                                console.log("[ubbmigrator] User[" + uid + "].picture:[" + data.avatar + "] set to " + picUrl);
                             });
-                        }
-                    });
-                }
-
-                if (data.avatar) {
-                    self._checkUrlResponse(data.avatar, function(result){
-                        var picUrl;
-
-                        // if it's not good
-                        if (!result) {
-                            // nbb creates an avatar url so, if the user have an older one and still good, we keep it
-                            // if not we try to create a gravatar from the realEmail not the fake one we created on top
-                            picUrl = User.createGravatarURLFromEmail(data.realEmail);
-                        } else {
-                            picUrl = data.avatar;
-                        }
-
-                        User.setUserField(uid, "picture", picUrl, function(){
-                            console.log("[ubbmigrator] User[" + uid + "].picture:[" + data.avatar + "] set to " + picUrl);
+                            User.setUserField(uid, "gravatarpicture", picUrl, function(){
+                                console.log("[ubbmigrator] User[" + uid + "].gravatarpicture:[" + data.avatar + "] set to " + picUrl);
+                            });
                         });
-                        User.setUserField(uid, "gravatarpicture", picUrl, function(){
-                            console.log("[ubbmigrator] User[" + uid + "].gravatarpicture:[" + data.avatar + "] set to " + picUrl);
+                    }
+
+                    data._redirect = {
+                        from: "[YOUR_UBB_PATH]/ubbthreads.php/users/" + data.ouid + "/" + data.originalUsername + "*",
+                        to: "[YOUR_NBB_PATH]/user/" + data.userslug
+                    };
+                    console.log("[ubbmigrator][redirect]" + data._redirect.from + " ---> " + data._redirect.to);
+
+                    // just save a copy in my big ubbToNbbMap for later, minus the correct website and avatar, who cares for now.
+                    self.ubbToNbbMap.users[data.ouid] = data;
+
+                    if (_users.length - 1 == ui) {
+                        this.slowWriteJSONtoFile(this.config.nbbTmpFiles.users, this.ubbToNbbMap.users, function(err) {
+                            if(!err) {
+                                console.log("[ubbmigrator] " + _users.length + " NBB Users saved, MAP in " + self.config.nbbTmpFiles.users);
+
+                                if (typeof next == "function")
+                                    next();
+
+                            } else {
+                                console.log("[ubbmigrator][ERROR] Could not write NBB Users " + err);
+                            }
                         });
-                    });
-                }
-
-                data._redirect = {
-                    from: "[YOUR_UBB_PATH]/ubbthreads.php/users/" + data.ouid + "/" + data.originalUsername + "*",
-                    to: "[YOUR_NBB_PATH]/user/" + data.userslug
-                };
-                console.log("[ubbmigrator][redirect]" + data._redirect.from + " ---> " + data._redirect.to);
-
-                // just save a copy in my big ubbToNbbMap for later, minus the correct website and avatar, who cares for now.
-                self.ubbToNbbMap.users[data.ouid] = data;
-            })
-        });
-
-        this.slowWriteJSONtoFile(this.config.nbbTmpFiles.users, this.ubbToNbbMap.users, function(err){
-            if(!err) {
-                console.log("[ubbmigrator] " + _users.length + " NBB Users saved, MAP in " + self.config.nbbTmpFiles.users);
-
-                if (typeof next == "function")
-                    next();
-
-            } else {
-                console.log("[ubbmigrator][ERROR] Could not write NBB Users " + err);
-            }
+                    }
+                });
+            });
         });
     },
-
-
 
     // save the UBB categories to nbb's redis
     // ubb.forums == nbb.categories
@@ -364,6 +415,7 @@ module.exports = {
             // order based on index i guess
             data.order = ci + 1;
 
+            console.log("[ubbmigrator] saving category: " + data.title);
             Categories.create(data, function(err, category) {
                 if (err) throw err;
 
@@ -417,6 +469,7 @@ module.exports = {
             var content = htmlToMarkdown(posts[data.postId].body);
             var title = data.title ? data.subject[0].toUpperCase() + data.title.substr(1) : "Untitled";
 
+            console.log("[ubbmigrator] saving topic: " + title);
             Topics.create(uid, title, content, categoryId, function(err, ret){
                 if (err) throw err;
 
@@ -468,6 +521,7 @@ module.exports = {
             // if this is a topic post, used for the topic's content
             if (data.parent == 0) return;
 
+            console.log("[ubbmigrator] saving topic: " + data.opid);
             Posts.create(uid, tid, content, function(err, postData){
                 if (err) throw err;
 
@@ -504,7 +558,7 @@ module.exports = {
     ubbGetUsers: function(next) {
         var self = this;
         this.ubbq(
-            "SELECT USER_ID as ouid, USER_LOGIN_NAME as username, USER_REGISTRATION_EMAIL as email,"
+            "SELECT USER_ID as ouid, USER_LOGIN_NAME as username, USER_DISPLAY_NAME as userDisplayName, USER_REGISTRATION_EMAIL as email,"
                 + " USER_MEMBERSHIP_LEVEL as level, USER_REGISTERED_ON as joindate,"
                 + " USER_IS_APPROVED as approved, USER_IS_banned as banned"
                 + " FROM " + self.config.ubbTablePrefix + "USERS"
@@ -605,7 +659,7 @@ module.exports = {
             });
     },
 
-   // get ubb topics
+    // get ubb topics
     ubbGetTopics: function(next) {
         var self = this;
         this.ubbq(
@@ -746,5 +800,13 @@ module.exports = {
             return str.substring(0, len) + "...";
         else
             return str;
+    },
+
+    // todo: i think I got that right?
+    stripFromSpecialChars: function(str) {
+        str = str.replace(/[^\u00BF-\u1FFF\u2C00-\uD7FF\-.*\w\s]/gi, '');
+        // todo: i don't know what I'm doing
+        return str.replace(/ /g,'').replace(/\*/g, '').replace(/æ/g, '').replace(/ø/g, '').replace(/å/g, '');
     }
+
 };
