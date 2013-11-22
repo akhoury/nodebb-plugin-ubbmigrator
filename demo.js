@@ -1,5 +1,8 @@
 var ubb = require("./library.js");
 ubb.migrate({
+
+    log: "debug",
+
     // ubb db config
     ubbDbConfig: {
         host: "127.0.0.1",
@@ -13,7 +16,7 @@ ubb.migrate({
     // the stuff below for dev purposes, take them out
     // hard limit on the posts since they're huge
     ubbqTestLimit: {
-        users: 1000,// 10000
+        users: null,// 10000
         posts: null// 10000
     },
     // skip any of the these from get and put?
@@ -25,5 +28,5 @@ ubb.migrate({
         posts: true
     },
     // don't put anything to nbb db
-    dontSaveToNbb: false
+    dontSaveToNbb: true
 });
