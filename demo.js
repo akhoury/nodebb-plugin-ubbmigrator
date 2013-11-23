@@ -1,7 +1,7 @@
 var ubb = require("./library.js");
 ubb.migrate({
 
-    log: "debug",
+    log: "",
 
     // ubb db config
     ubbDbConfig: {
@@ -10,6 +10,7 @@ ubb.migrate({
         password: "password",
         database: "ubb_test"
     },
+
     // optional, that's the default
     ubbTablePrefix: "ubbt_",
 
@@ -28,5 +29,6 @@ ubb.migrate({
         posts: true
     },
     // don't put anything to nbb db
-    dontSaveToNbb: true
+    dontSaveToNbb: false,
+    dontGetFromUbb: true
 });

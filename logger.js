@@ -5,11 +5,13 @@ module.exports = {
         this.d = this.l.indexOf("debug") >= 0;
         this.i = this.l.indexOf("info") >= 0;
         this.w = this.l.indexOf("warn") >= 0;
+        this.e = this.l.indexOf("error") >= 0;
 
         //rules
         this.i = this.d || this.i;
         this.w = this.d || this.w;
-        this.e = this.d || this.e;
+        // basically always true
+        this.e = this.d || this.e || this.i || this.w;
 
         if (!this.i)
             this.info = function(){};
@@ -22,24 +24,19 @@ module.exports = {
 
         return this;
     },
-    // will always be there for you
     log: function(s){
             console.log(this.p + "[log] " + s);
     },
     error: function(s){
-        if (this.e)
             console.log(this.p + "[error] " + s);
     },
     warn: function(s){
-        if (this.w)
             console.log(this.p + "[warn] " + s);
     },
     info: function(s){
-        if (this.i)
             console.log(this.p + "[info] " + s);
     },
     debug: function(s){
-        if (this.d)
             console.log(this.p + "[debug] " + s);
     }
 };

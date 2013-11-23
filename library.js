@@ -19,15 +19,34 @@
 
 "use strict";
 
+
+var User, Topics, Posts, Categories;
+// todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's working for some reason
+try {
+    User = module.parent.require('./user.js');
+    Topics = module.parent.require('./topics.js');
+    Posts = module.parent.require('./posts.js');
+    Categories = module.parent.require('./categories.js');
+} catch (e) {
+    console.log("HA! ");
+    User = require('../../src/user.js');
+    Topics = require('../../src/topics.js');
+    Posts = require('../../src/posts.js');
+    Categories = require('../../src/categories.js');
+}
+
+
 var
 
 // nbb Objects, required, these paths assume that the plugin lives in /NodeBB/node_modules/nodebb-plugin-ubbmigrator
 // todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's working for some reason
-    User = module.parent.require('../../src/user.js'),
-    Topics = module.parent.require('../../src/topics.js'),
-    Posts = module.parent.require('../../src/posts.js'),
-    Categories = module.parent.require('../../src/categories.js'),
-    utils = module.parent.require('../../public/src/utils.js'),
+//    User = module.parent.require('./user.js'),
+//    Topics = module.parent.require('./topics.js'),
+//    Posts = module.parent.require('./posts.js'),
+//    Categories = module.parent.require('./categories.js'),
+
+// nbb utils, very useful
+    utils = require('../../public/src/utils.js'),
 
 // some useful modules
 
@@ -45,7 +64,8 @@ var
 
 // my quick logger
     Logger = require("./logger.js"),
-    logger; //later to be initialized with configs
+//later to be initialized with config in init()
+    logger;
 
 module.exports = {
 
@@ -56,17 +76,98 @@ module.exports = {
                 self.init(config, next);
             },
             function(next){
+                logger.debug("setup()");
                 self.setup(next);
             },
-            function(next){
-                self.ubbGetAll(next);
+            function (next) {
+                if (self.config.skip.users || self.config.dontGetFromUbb) {
+                    logger.debug("Skipping ubbGetUsers()");
+                    next();
+                }
+                else{
+                    logger.debug("ubbGetUsers()");
+                    self.ubbGetUsers(next);
+                }
             },
-            function(next){
-                self.nbbSaveAll(next);
+            function (next) {
+                if (self.config.skip.categories || self.config.dontGetFromUbb) {
+                    logger.debug("Skipping ubbGetCategories()");
+                    next();
+                }
+                else{
+                    logger.debug("ubbGetCategories()");
+                    self.ubbGetCategories(next);
+                }
+            },
+            function (next) {
+                if (self.config.skip.forums || self.config.dontGetFromUbb) {
+                    logger.debug("Skipping ubbGetForums()");
+                    next();
+                }
+                else{
+                    logger.debug("ubbGetForums()");
+                    self.ubbGetForums(next);
+                }
+            },
+            function (next) {
+                if (self.config.skip.topics || self.config.dontGetFromUbb) {
+                    logger.debug("Skipping ubbGetTopics()");
+                    next();
+                }
+                else{
+                    logger.debug("ubbGetTopics()");
+                    self.ubbGetTopics(next);
+                }
+            },
+            function (next) {
+                if (self.config.skip.posts || self.config.dontGetFromUbb) {
+                    logger.debug("Skipping ubbGetPosts()");
+                    next();
+                }
+                else{
+                    logger.debug("ubbGetPosts()");
+                    self.ubbGetPosts(next);
+                }
+            },
+            function(next) {
+                if (self.config.skip.users || self.config.dontSaveToNbb) {
+                    logger.debug("Skipping nbbSaveUsers()");
+                    next();
+                } else {
+                    logger.debug("nbbSaveUsers()");
+                    self.nbbSaveUsers(next);
+                }
+            },
+            function(next) {
+                // ubb.forums ===> nbb.categories
+                if (self.config.skip.forums || self.config.dontSaveToNbb) {
+                    logger.debug("Skipping nbbSaveCategories()");
+                    next();
+                } else {
+                    logger.debug("nbbSaveCategories()");
+                    self.nbbSaveCategories(next);
+                }
+            },
+            function(next) {
+                if (self.config.skip.topics || self.config.dontSaveToNbb) {
+                    logger.debug("Skipping nbbSaveTopics()");
+                    next();
+                } else {
+                    logger.debug("nbbSaveTopics()");
+                    self.nbbSaveTopics(next);
+                }
+            },
+            function(next) {
+                if (self.config.skip.posts || self.config.dontSaveToNbb) {
+                    logger.debug("Skipping nbbSavePosts()");
+                    next();
+                } else {
+                    logger.debug("nbbSavePosts()");
+                    self.nbbSavePosts(next);
+                }
             },
             function(){
-                self.ubbDisconnect();
-                process.exit(1);
+                self.exit();
             }
         ]);
     },
@@ -81,6 +182,7 @@ module.exports = {
             ubbDbConfig: null,
             ubbTablePrefix: "ubbt_",
 
+            // these NEED to start with ./whatever.json NOT whatever.json since I'm using require() to load them. I know, don't judge me pls.
             ubbTmpFiles: {
                 users: "./tmp/ubb/users.json",
                 categories: "./tmp/ubb/categories.json",
@@ -88,7 +190,6 @@ module.exports = {
                 topics: "./tmp/ubb/topics.json",
                 posts: "./tmp/ubb/posts.json"
             },
-
             nbbTmpFiles: {
                 users: "./tmp/nbb/users.json",
                 // forums become categories in NBB, and I loose UBB categories
@@ -96,7 +197,6 @@ module.exports = {
                 topics: "./tmp/nbb/topics.json",
                 posts: "./tmp/nbb/posts.json"
             },
-
             ubbToNbbMapFile: "./tmp/ubbToNbbMap.json",
 
             ubbqTestLimit: {
@@ -135,11 +235,15 @@ module.exports = {
                 // ONLY replace the MY_UBB_PATH and MY_NBB_PATH and leave the ${FROM} and ${TO} as they will be replaced appropriately
                 // example: rewrite ^/MY_UBB_PATH/users/123(.*)$ /MY_NBB_PATH/user/elvis/$1 last;
                 rule: " rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;"
-            }
+            },
+
+            // defaults to 1000 by NodeBB, if you have it different, pass it in the config.
+            moderatorReputationThreshold: 1000
 
         }, config);
 
-        logger = Logger.init("debug");
+        logger = Logger.init(this.config.log);
+        logger.debug("init()");
 
         if (typeof next == "function")
             next();
@@ -181,55 +285,13 @@ module.exports = {
             });
 
         Object.keys(this.config.nbbTmpFiles).forEach(function(key){
-            fs.createFileSync(self.config.ubbTmpFiles[key]);
+            fs.createFileSync(self.config.nbbTmpFiles[key]);
         });
 
         fs.createFileSync(this.config.ubbToNbbMapFile);
 
         if (typeof next == "function")
             next();
-    },
-
-
-    ubbGetAll: function(next) {
-        var self = this;
-        if (!self.config.dontGetFromUbb) {
-            async.series([
-                function (next) {
-                    if (self.config.skip.users)
-                        next();
-                    else
-                        self.ubbGetUsers(next);
-                },
-                function (next) {
-                    if (self.config.skip.categories)
-                        next();
-                    else
-                        self.ubbGetCategories(next);
-                },
-                function (next) {
-                    if (self.config.skip.forums)
-                        next();
-                    else
-                        self.ubbGetForums(next);
-                },
-                function (next) {
-                    if (self.config.skip.topics)
-                        next();
-                    else
-                        self.ubbGetTopics(next);
-                },
-                function (next) {
-                    if (self.config.skip.posts)
-                        next();
-                    else
-                        self.ubbGetPosts(next);
-                }
-            ]);
-        } else {
-            if (typeof next == "function")
-                next();
-        }
     },
 
     // get ubb users
@@ -275,8 +337,11 @@ module.exports = {
                     self.ubbData.users[profile._ouid] = $.extend({}, profile, self.ubbData.users[profile._ouid]);
                 });
 
-                self._filterSaveUbbUsers(self.ubbData.users);
-                self._mdUbbUsersSignatures();
+                self._ubbNormalizeUsers(self.ubbData.users);
+                self._ubbMarkdownUsersSignatures();
+
+                if(typeof next == "function")
+                    next();
             });
     },
 
@@ -307,8 +372,8 @@ module.exports = {
         return {username: username, userslug: userslug,  validUsername: validUsername, _username: _username, _userDisplayName: _userDisplayName};
     },
 
-    _filterSaveUbbUsers: function(users) {
-        var self = this, counter = 0, first = true;
+    _ubbNormalizeUsers: function(users) {
+        var self = this, first = true;
         var arr = Object.keys(users);
 
         fs.writeFileSync(self.config.ubbTmpFiles.users, "");
@@ -323,6 +388,9 @@ module.exports = {
                     // nbb forces signatures to be less than 150 chars
                     user.signature = self.truncateStr(user._signature || "", 150);
 
+                    // from unix timestamp (s) to JS timestamp (ms)
+                    user._joindate = user._joindate * 1000;
+
                     // lower case the email as well, but I won't use it for the creation of the user
                     // nbb tries to send an email at the creation of the user account
                     // so after looking at nbb source, it looks like i can get away with setting some
@@ -330,12 +398,12 @@ module.exports = {
                     user._email = user._email.toLowerCase();
                     // todo: i should probably move that to a config, just in case you don't want to do that
                     // also that will mess up the gravatar generated url, so I fix that at the end of each iteration, keep scrolling
-                    user.email = "unique.email.that.doesnt.work." + user._ouid + "@but.still.validates.nbb.check";
+                    user.email = "aaa." + user._ouid + "@aaa.aaa";
 
                     // I don't know about you about I noticed a lot my users have incomplete urls
                     //user.avatar = self._isValidUrl(user._avatar) ? user._avatar : "";
                     //user.website = self._isValidUrl(user._website) ? user._website : "";
-                    // the one above was taking too long
+                    // this is a little faster, and less agressive
                     user.avatar = self._isValidUrlSimple(user._avatar) ? user._avatar : "";
                     user.website = self._isValidUrlSimple(user._website) ? user._website : "";
 
@@ -349,11 +417,9 @@ module.exports = {
                     if (first)
                         first = false;
 
-                    if (counter % 1000 == 0)
-                        logger.info(" saved " + counter + " users so far.");
+                    if (ui % 1000 == 0)
+                        logger.info(" saved " + ui + " users so far.");
 
-                    users[_ouid] = user;
-                    counter++;
                 } else {
                     logger.debug("[!username] skipping user " + user._username + ":" + user._email + " _ouid: " + _ouid);
                     delete users[_ouid];
@@ -365,29 +431,30 @@ module.exports = {
         });
         fs.appendFileSync(self.config.ubbTmpFiles.users, "]");
 
-        logger.info(" saved " + counter + " users.");
         logger.debug("filtering " + arr.length + " users done");
         return users;
     },
 
-    _mdUbbUsersSignatures: function() {
-        var self = this, counter = 0;
+    _ubbMarkdownUsersSignatures: function() {
+        var self = this, first = true;
         var users = require(self.config.ubbTmpFiles.users);
         var arr = Object.keys(users);
 
-        fs.writeFileSync(self.config.ubbTmpFiles.users + ".md", "");
+        // empty dat file
+        fs.writeFileSync(self.config.ubbTmpFiles.users, "");
 
         arr.forEach(function(_ouid, ui){
             var user = users[_ouid];
             user.signatureMd = self.hazHtml(user.signature) ? htmlToMarkdown(user.signature) : user.signature;
-            fs.appendFileSync(self.config.ubbTmpFiles.users + ".md", JSON.stringify(user, null, 4) + ",\n");
+            fs.appendFileSync(self.config.ubbTmpFiles.users, (first ? "[" : ",\n") +  JSON.stringify(user, null, 4));
 
-            if (counter % 1000 == 0)
-                logger.info("'Markdowning' signatures processed " + counter + " users so far.");
+            if (first)
+                first = false;
 
-            counter++;
+            if (ui % 1000 == 0)
+                logger.info("'Markdowning' signatures processed " + ui + " users so far.");
         });
-        logger.info("'Markdowning' signatures processed " + counter + " users.");
+        fs.appendFileSync(self.config.ubbTmpFiles.users, "]");
         logger.debug("Markdowning " + arr.length + " users done");
         return users;
     },
@@ -437,7 +504,7 @@ module.exports = {
 
                 self.slowWriteJSONtoFile(self.config.ubbTmpFiles.forums, self.ubbData.forums, function(err){
                     if(!err)
-                        logger.debug(" " + rows.length + " UBB Forums saved in " + self.config.ubbTmpFiles.forums);
+                        logger.debug(rows.length + " UBB Forums saved in " + self.config.ubbTmpFiles.forums);
                     else
                         logger.debug(" Could not save UBB Forums " + err);
 
@@ -504,75 +571,32 @@ module.exports = {
             });
     },
 
-    // save to Nbb
-    nbbSaveAll: function(next){
-        var self = this;
-        if (!self.config.dontSaveToNbb) {
-            async.series([
-                function(next){
-                    if (self.config.skip.users)
-                        next();
-                    else
-                        self.nbbSaveUsers(next);
-                },
-                function(next){
-                    // ubb.forums ===> nbb.categories
-                    if (self.config.skip.forums)
-                        next();
-                    else
-                        self.nbbSaveCategories(next);
-                },
-                function(next){
-                    if (self.config.skip.topics)
-                        next();
-                    else
-                        self.nbbSaveTopics(next);
-                },
-                function(next){
-                    if (self.config.skip.posts)
-                        next();
-                    else
-                        self.nbbSavePosts(next);
-                }
-            ]);
-        } else {
-            if (typeof next == "function")
-                next();
-        }
-    },
-
 // save the UBB users to nbb's redis
     nbbSaveUsers: function(next) {
         var self = this;
         var users = require(this.config.ubbTmpFiles.users);
         var _users = Object.keys(users);
 
+
         // iterate over each
         _users.forEach(function(key, ui) {
             // get the data from db
             var user = users[key];
 
-            logger.debug("saving username: " + data.username + " [" + ui + "]");
-
-            async.waterfall([
-                function(cb){
-                    User.create(user.username, user.password, user.email, function(err, uid) {
-                        if (err) {
-                            logger.error(" username: " + user.username + " : " + err);
-                            cb(err, uid);
-                        } else {
-                            cb(null, uid);
-                        }
-                    });
-                },
-                function(err, uid, cb) {
-                    if (err) cb(err);
-
+            logger.debug("creating user: " + user.username + " [" + ui + "]");
+            User.create(user.username, user.password, user.email, function(err, uid) {
+                if (err) {
+                    logger.error(" username: " + user.username + " cannot be saved in nbb db. " + err);
+                } else {
+                    logger.debug(user.username + " [" + uid + "] created.");
                     // saving that for the map
                     user.uid = uid;
+                    // back to the real email
+                    user.email = user._email;
 
+                    logger.debug("setting user fields : " + user.username + " [" + ui + "]");
                     // set some of the fields got from the ubb
-                    User.setUserFields(uid, {
+                    var _u_ = {
                         // preseve the signature and website if there is any
                         signature: user.signatureMd,
                         website: user.website || "",
@@ -583,31 +607,40 @@ module.exports = {
                         // preserse the  joindate, luckily here, ubb uses timestamps too
                         joindate: user._joindate,
                         // now I set the real email back in
-                        email: user._email
-                    });
+                        email: user._email,
+                        // that's the best I could come up with I guess
+                        reputation: user._level == "Moderator" || user._level == "Administrator" ? (self.config.moderatorReputationThreshold + user._rating) || 0 : user._rating || 0,
+                        profileviews: user._totalRates
+                    };
 
-                    cb(null, null, user.userslug);
-                },
-                function(err, userslug, cb){
-                    if (err)
-                        cb(err);
-
-                    user.redirectRule = self.redirectRule("users/" + data.ouid + "/" + data.originalUsername + "/", "user/" + userslug);
+                    if (user.avatar) {
+                        _u_.gravatarpicture = user.avatar;
+                        _u_.picture = user.avatar;
+                        user.customPicture = true;
+                    }
+                    user.redirectRule = self.redirectRule("users/" + user._ouid + "/" + user._username + "/", "user/" + user.userslug);
+                    user = $.extend({}, user, _u_);
                     self.ubbToNbbMap.users[user._ouid] = user;
-
-                    cb(err);
+                    User.setUserFields(uid, _u_);
                 }
-            ], function(err){
-                // just save a copy in my big ubbToNbbMap for later, minus the correct website and avatar, who cares for now.
-                if (!err) {
-                    self.slowWriteJSONtoFile(self.config.nbbTmpFiles.users, self.ubbToNbbMap.users, function(error) {
-                        if (!error)
-                            logger.info(_users.length + " NBB Users saved, MAP in " + self.config.nbbTmpFiles.users);
-                        else
-                            logger.error("Could not write NBB Users " + err);
-                    });
+
+                if (ui ==  _users.length - 1) {
+                    //last one done.
+                    self.saveMap(self.config.nbbTmpFiles.users, self.ubbToNbbMap.users, _users.length, "Users", next);
                 }
             });
+        });
+    },
+
+    saveMap: function(file, map, length, wat, next){
+        // just save a copy in my big ubbToNbbMap for later, minus the correct website and avatar, who cares for now.
+        this.slowWriteJSONtoFile(file, map, function(_err) {
+            if (!_err)
+                logger.info(length + " NBB " + wat + " saved, MAP in " + file);
+            else
+                logger.error("Could not write NBB Users " + _err);
+
+            next();
         });
     },
 
@@ -647,7 +680,7 @@ module.exports = {
                 };
 
                 // save a reference from the old category to the new one
-                self.ubbToNbbMap.categories[data.ofid] = category;
+                self.ubbToNbbMap.categories[data._ofid] = category;
 
                 logger.debug("[redirect]" + category._redirect.from + " ---> " + category._redirect.to);
 
@@ -777,6 +810,11 @@ module.exports = {
 
 // helpers
 
+    exit: function(code){
+        logger.info("Exiting...");
+        this.ubbDisconnect();
+        process.exit(this.isNumber(code) ? code : 0);
+    },
 
 // disconnect from the ubb mysql database
     ubbDisconnect: function(){
@@ -856,14 +894,23 @@ module.exports = {
         });
     },
 
-    truncateStr: function(str, len) {
-        str = "" + str;
-        len = len ? len - 3 : 30;
+    truncateStr : function (str, len) {
+        if (typeof str != "string") return str;
+        len = this.isNumber(len) && len > 3 ? len : 20;
+        return str.length <= len ? str : str.substr(0, len - 3) + "...";
+    },
 
-        if (str.length > len)
-            return str.substring(0, len) + "...";
-        else
-            return str;
+    isNumber : function (n) {
+        return !isNaN(parseFloat(n)) && isFinite(n);
+    },
+
+    hasNumber : function (n) {
+        return !isNaN(parseFloat(n));
+    },
+
+    monthWord : function (i) {
+        return (function(){return {0: "Jan", 1: "Feb", 2: "Mar", 3: "Apr", 4: "May", 5: "Jun",
+            6: "Jul", 7: "Aug", 8: "Sep", 9: "Oct", 10: "Nov", 11: "Dec" }})()[i];
     },
 
 // todo: i think I got that right?
