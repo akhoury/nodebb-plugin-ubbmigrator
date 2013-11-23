@@ -11,6 +11,23 @@ ubb.migrate({
         database: "ubb_test"
     },
 
+    // these NEED to start with ./whatever.json NOT whatever.json since I'm using require() to load them. I know, don't judge me pls.
+    ubbTmpFiles: {
+        users: "../tmp/ubb/users.json",
+        categories: "../tmp/ubb/categories.json",
+        forums: "../tmp/ubb/forums.json",
+        topics: "../tmp/ubb/topics.json",
+        posts: "../tmp/ubb/posts.json"
+    },
+    nbbTmpFiles: {
+        users: "../tmp/nbb/users.json",
+        // forums become categories in NBB, and I loose UBB categories
+        categories: "../tmp/nbb/categories.json",
+        topics: "../tmp/nbb/topics.json",
+        posts: "../tmp/nbb/posts.json"
+    },
+    ubbToNbbMapFile: "../tmp/ubbToNbbMap.json",
+
     // optional, that's the default
     ubbTablePrefix: "ubbt_",
 
@@ -23,12 +40,12 @@ ubb.migrate({
     // skip any of the these from get and put?
     skip: {
         users: false,
-        categories: true,
-        forums: true,
-        topics: true,
+        categories: false,
+        forums: false,
+        topics: false,
         posts: true
     },
     // don't put anything to nbb db
     dontSaveToNbb: false,
-    dontGetFromUbb: true
+    dontGetFromUbb: false
 });

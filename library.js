@@ -2,13 +2,12 @@
  if you're reading this source please not that "NodeBB" == "nbb" ==  "Nbb" == "NBB" as a terminology
  and ubb means the UBB Threads Forum Software, here's a link => http://www.ubbcentral.com/
 
- This Converter is written and tested for UBB 7.5.7, released in 2013,
- so.. if you're reading this in 2200, it's probably outdated.
+ This Converter is written and tested for UBB 7.5.7 which was released sometime in 2013,
  */
 
-// todo moderators?
-
-// todo generate my nginx rewrite rules
+// todo maybe go through all users who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to my old forum avatar dir
+// todo nothing is really skippable at the moment, the nodebb db needs to be flushed, run node app.js --setup, then node app.js --upgrade
+// todo generate my nginx rewrite rules from the nbb map files
 // todo still, make sure the [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars
 // todo clear the default categories in nodebb/install so I would start with fresh categories.
 
@@ -20,19 +19,22 @@
 "use strict";
 
 
-var User, Topics, Posts, Categories;
+var User, Topics, Posts, Categories, RDB;
+
 // todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's working for some reason
 try {
     User = module.parent.require('./user.js');
     Topics = module.parent.require('./topics.js');
     Posts = module.parent.require('./posts.js');
     Categories = module.parent.require('./categories.js');
+    RDB = module.parent.require('./redis.js');
 } catch (e) {
     console.log("HA! ");
     User = require('../../src/user.js');
     Topics = require('../../src/topics.js');
     Posts = require('../../src/posts.js');
     Categories = require('../../src/categories.js');
+    RDB = require('../../src/redis.js');
 }
 
 
@@ -166,6 +168,9 @@ module.exports = {
                     self.nbbSavePosts(next);
                 }
             },
+            function(next) {
+                self.restoreNbbConfigs(next);
+            },
             function(){
                 self.exit();
             }
@@ -249,6 +254,34 @@ module.exports = {
             next();
     },
 
+    backupNbbConfigs: function(next, cb){
+        var self = this;
+        RDB.hgetall("config", function(err, data){
+            self.config.nbbConfigs = data || {};
+            cb(next)
+        });
+    },
+    tempSetNbbConfigs: function(next){
+        var nbbTempConfigs = this.config.nbbConfigs;
+
+        // yea.. i dont know .. i have a bad feeling about this
+        nbbTempConfigs.postDelay = 0;
+        nbbTempConfigs.minimumPostLength = 1;
+        nbbTempConfigs.minimumTitleLength = 1;
+        nbbTempConfigs.maximumUsernameLength = 50;
+        nbbTempConfigs.maximumProfileImageSize = 1024;
+
+        RDB.hmset("config", nbbTempConfigs, function(){
+            next();
+        });
+    },
+
+    restoreNbbConfigs: function(next){
+        RDB.hmset("config", this.config.nbbConfigs, function(){
+            next();
+        });
+    },
+
     setup: function(next){
         var self = this;
 
@@ -290,8 +323,10 @@ module.exports = {
 
         fs.createFileSync(this.config.ubbToNbbMapFile);
 
-        if (typeof next == "function")
-            next();
+        // deleting the first 12 default categories by nbb
+        RDB.del("category:1 category:2 category:3 category:4 category:5 category:6 category:7 category:8 category:9 category:10 category:11 category:12", function(){
+            self.backupNbbConfigs(next, self.tempSetNbbConfigs.bind(self));
+        });
     },
 
     // get ubb users
@@ -329,7 +364,7 @@ module.exports = {
             function(err, rows){
                 if (err) throw err;
 
-                logger.debug(" UsersProfiles query came back with " + rows.length + " records, now filtering then writing to tmp dir, please be patient.");
+                logger.info("UsersProfiles query came back with " + rows.length + " records, now filtering then writing to tmp dir, please be patient.");
                 self.ubbData.usersProfiles = rows;
 
                 self.ubbData.usersProfiles.forEach(function(profile){
@@ -421,17 +456,17 @@ module.exports = {
                         logger.info(" saved " + ui + " users so far.");
 
                 } else {
-                    logger.debug("[!username] skipping user " + user._username + ":" + user._email + " _ouid: " + _ouid);
+                    logger.warn("[!username] skipping user " + user._username + ":" + user._email + " _ouid: " + _ouid);
                     delete users[_ouid];
                 }
             } else {
-                logger.debug("[!_username | !_joindate | !_email] skipping user " + user._username + ":" + user._email + " _ouid: " + _ouid);
+                logger.warn("[!_username | !_joindate | !_email] skipping user " + user._username + ":" + user._email + " _ouid: " + _ouid);
                 delete users[_ouid];
             }
         });
         fs.appendFileSync(self.config.ubbTmpFiles.users, "]");
 
-        logger.debug("filtering " + arr.length + " users done");
+        logger.info("filtering " + arr.length + " users done");
         return users;
     },
 
@@ -466,24 +501,16 @@ module.exports = {
     ubbGetCategories: function(next) {
         var self = this;
         this.ubbq(
-            "SELECT CATEGORY_ID as ocid, CATEGORY_TITLE as name, CATEGORY_DESCRIPTION as description"
+            "SELECT CATEGORY_ID as _ocid, CATEGORY_TITLE as _name, CATEGORY_DESCRIPTION as _description"
                 + " FROM " + self.config.ubbTablePrefix + "CATEGORIES"
                 + (self.config.ubbqTestLimit.categories ? " LIMIT " + self.config.ubbqTestLimit.categories : ""),
 
             function(err, rows){
-                logger.debug(" Categories query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
+                logger.info("Categories query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.categories = self._convertListToMap(rows, "ocid");
+                self.ubbData.categories = self._convertListToMap(rows, "_ocid");
 
-                self.slowWriteJSONtoFile(self.config.ubbTmpFiles.categories, self.ubbData.categories, function(err){
-                    if(!err)
-                        logger.debug(rows.length + " UBB Categories saved in " + self.config.ubbTmpFiles.categories);
-                    else
-                        logger.debug("Could not save UBB Categories " + err);
-
-                    if (typeof next == "function")
-                        next();
-                });
+                self.saveMap(self.config.ubbTmpFiles.categories, self.ubbData.categories, rows.length, " UBB Categories ", next);
 
             });
     },
@@ -492,25 +519,17 @@ module.exports = {
     ubbGetForums: function(next) {
         var self = this;
         this.ubbq(
-            "SELECT FORUM_ID as ofid, FORUM_TITLE as title, FORUM_DESCRIPTION as description,"
-                + " CATEGORY_ID as categoryId, FORUM_CREATED_ON as datetime"
+            "SELECT FORUM_ID as _ofid, FORUM_TITLE as _name, FORUM_DESCRIPTION as _description,"
+                + " CATEGORY_ID as _categoryId, FORUM_CREATED_ON as _datetime"
                 + " FROM " + self.config.ubbTablePrefix + "FORUMS"
                 + (self.config.ubbqTestLimit.forums ? " LIMIT " + self.config.ubbqTestLimit.forums : ""),
 
             function(err, rows){
-                logger.debug(" Forums query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
+                logger.info("Forums query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.forums = self._convertListToMap(rows, "ofid");
+                self.ubbData.forums = self._convertListToMap(rows, "_ofid");
 
-                self.slowWriteJSONtoFile(self.config.ubbTmpFiles.forums, self.ubbData.forums, function(err){
-                    if(!err)
-                        logger.debug(rows.length + " UBB Forums saved in " + self.config.ubbTmpFiles.forums);
-                    else
-                        logger.debug(" Could not save UBB Forums " + err);
-
-                    if (typeof next == "function")
-                        next();
-                });
+                self.saveMap(self.config.ubbTmpFiles.forums, self.ubbData.forums, rows.length, " UBB Forums ", next);
             });
     },
 
@@ -518,29 +537,21 @@ module.exports = {
     ubbGetTopics: function(next) {
         var self = this;
         this.ubbq(
-            "SELECT TOPIC_ID as otid, FORUM_ID as forumId, POST_ID as postId,"
-                + " USER_ID as userId, TOPIC_VIEWS as views,"
-                + " TOPIC_SUBJECT as subject, TOPIC_REPLIES as replies,"
-                + " TOPIC_TOTAL_RATES as totalRates, TOPIC_RATING as rating,"
-                + " TOPIC_CREATED_TIME as datetime, TOPIC_IS_APPROVED as approved,"
-                + " TOPIC_STATUS as status, TOPIC_IS_STICKY as pinned"
+            "SELECT TOPIC_ID as _otid, FORUM_ID as _forumId, POST_ID as _postId,"
+                + " USER_ID as _userId, TOPIC_VIEWS as _views,"
+                + " TOPIC_SUBJECT as _title, TOPIC_REPLIES as _replies,"
+                + " TOPIC_TOTAL_RATES as _totalRates, TOPIC_RATING as _rating,"
+                + " TOPIC_CREATED_TIME as _datetime, TOPIC_IS_APPROVED as _approved,"
+                + " TOPIC_STATUS as _status, TOPIC_IS_STICKY as _pinned"
                 + " FROM " + self.config.ubbTablePrefix + "TOPICS"
                 + (self.config.ubbqTestLimit.topics ? " LIMIT " + self.config.ubbqTestLimit.topics : ""),
 
             function(err, rows){
-                logger.debug(" Topics query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
+                logger.info("Topics query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.topics = self._convertListToMap(rows, "otid");
+                self.ubbData.topics = self._convertListToMap(rows, "_otid");
 
-                self.slowWriteJSONtoFile(self.config.ubbTmpFiles.topics, self.ubbData.topics, function(err){
-                    if(!err)
-                        logger.debug(" " + rows.length + " UBB Topics saved in " + self.config.ubbTmpFiles.topics);
-                    else
-                        logger.debug(" Could not save UBB Topics " + err);
-
-                    if (typeof next == "function")
-                        next();
-                });
+                self.saveMap(self.config.ubbTmpFiles.topics, self.ubbData.topics, rows.length, " UBB Topics ", next);
             });
     },
 
@@ -548,26 +559,19 @@ module.exports = {
     ubbGetPosts: function(next) {
         var self = this;
         this.ubbq(
-            "SELECT POST_ID as opid, POST_PARENT_ID as parent, POST_PARENT_USER_ID as parentUserId, TOPIC_ID as topicId,"
-                + " POST_POSTED_TIME as datetime, POST_SUBJECT as subject,"
-                + " POST_BODY as body, POST_DEFAULT_BODY as defaultBody, USER_ID as userId,"
-                + " POST_MARKUP_TYPE as markup, POST_IS_APPROVED as approved"
+            "SELECT POST_ID as _opid, POST_PARENT_ID as _parent, POST_PARENT_USER_ID as _parentUserId, TOPIC_ID as _topicId,"
+                + " POST_POSTED_TIME as _datetime, POST_SUBJECT as _subject,"
+                + " POST_BODY as _body, POST_DEFAULT_BODY as _defaultBody, USER_ID as _userId,"
+                + " POST_MARKUP_TYPE as _markup, POST_IS_APPROVED as _approved"
                 + " FROM " + self.config.ubbTablePrefix + "POSTS"
                 + (self.config.ubbqTestLimit.posts ? " LIMIT " + self.config.ubbqTestLimit.posts : ""),
 
             function(err, rows){
                 logger.debug(" Posts query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.posts = self._convertListToMap(rows, "opid");
-                self.slowWriteJSONtoFile(self.config.ubbTmpFiles.posts, self.ubbData.posts, function(err){
-                    if(!err)
-                        logger.debug(" " + rows.length + " UBB Posts saved in " + self.config.ubbTmpFiles.posts);
-                    else
-                        logger.debug(" Could not save UBB Posts " + err);
+                self.ubbData.posts = self._convertListToMap(rows, "_opid");
 
-                    if (typeof next == "function")
-                        next();
-                });
+                self.saveMap(self.config.ubbTmpFiles.posts, self.ubbData.posts, rows.length, " UBB Posts ", next);
             });
     },
 
@@ -622,11 +626,11 @@ module.exports = {
                     user = $.extend({}, user, _u_);
                     self.ubbToNbbMap.users[user._ouid] = user;
                     User.setUserFields(uid, _u_);
-                }
 
-                if (ui ==  _users.length - 1) {
-                    //last one done.
-                    self.saveMap(self.config.nbbTmpFiles.users, self.ubbToNbbMap.users, _users.length, "Users", next);
+                    if (ui == _users.length - 1) {
+                        //last one done.
+                        self.saveMap(self.config.nbbTmpFiles.users, self.ubbToNbbMap.users, _users.length, "NBB Users", next);
+                    }
                 }
             });
         });
@@ -636,17 +640,18 @@ module.exports = {
         // just save a copy in my big ubbToNbbMap for later, minus the correct website and avatar, who cares for now.
         this.slowWriteJSONtoFile(file, map, function(_err) {
             if (!_err)
-                logger.info(length + " NBB " + wat + " saved, MAP in " + file);
+                logger.info(length + wat + " saved, MAP in " + file);
             else
                 logger.error("Could not write NBB Users " + _err);
 
-            next();
+            if (typeof next == "function")
+                next();
         });
     },
 
     redirectRule: function(from, to) {
         var res = this.config.nginx.rule.replace("${FROM}", from).replace("${TO}", to);
-        logger.info(res);
+        logger.important(res);
         return res;
     },
 
@@ -660,54 +665,43 @@ module.exports = {
         // iterate over each
         _categories.forEach(function(key, ci){
             // get the data from db
-            var data = categories[key];
+            var category = categories[key];
 
             // set some defaults since i don't have them
-            data.icon = "icon-comment";
-            data.blockclass = "category-blue";
+            category.icon = "icon-comment";
+            category.blockclass = "category-blue";
 
             // order based on index i guess
-            data.order = ci + 1;
+            category.order = ci + 1;
 
-            logger.debug(" saving category: " + data.title);
-            Categories.create(data, function(err, category) {
-                if (err) throw err;
+            category.name = category._name;
+            category.description = category._description;
 
-                // you will need these to create "RewriteRules", i'll let you figure that out
-                category._redirect = {
-                    from: "[YOUR_UBB_PATH]/ubbthreads.php/forums/" + data.ofid + "/*",
-                    to: "[YOUR_NBB_PATH]/category/" + category.cid + "/" + category.slug
-                };
+            logger.debug(" saving category: " + category.name);
+            Categories.create(category, function(err, categoryData) {
+                if (err) {
+                    logger.error(err);
+                } else {
+                    logger.debug("category: " + category.name + " saved [" + ci + "]");
+                    categoryData.redirectRule = self.redirectRule("forums/" + category._ofid + "/", "category/" + categoryData.cid + "/" + categoryData.slug);
 
-                // save a reference from the old category to the new one
-                self.ubbToNbbMap.categories[data._ofid] = category;
+                    category = $.extend({}, category, categoryData);
 
-                logger.debug("[redirect]" + category._redirect.from + " ---> " + category._redirect.to);
-
+                    // save a reference from the old category to the new one
+                    self.ubbToNbbMap.categories[category._ofid] = category;
+                }
                 // is this the last one?
-                if (ci == _categories.length) {
-                    if (typeof next == "function")
-                        next();
+                if (ci == _categories.length - 1) {
+                    self.saveMap(self.config.nbbTmpFiles.categories, self.ubbToNbbMap.categories, _categories.length, " NBB Categories ", next);
                 }
             })
-        });
-
-        this.slowWriteJSONtoFile(this.config.nbbTmpFiles.categories, this.ubbToNbbMap.categories, function(err){
-            if(!err) {
-                logger.debug(" " + _categories.length + " NBB Categories saved, MAP in " + self.config.nbbTmpFiles.categories);
-
-                if (typeof next == "function")
-                    next();
-            } else {
-                logger.debug(" Could not write NBB Categories " + err);
-            }
         });
     },
 
 // save the UBB topics to nbb's redis
     nbbSaveTopics: function(next){
         // topics chez nbb are forums chez ubb
-        var topics = require(this.config.ubbTmpFiles.forums);
+        var topics = require(this.config.ubbTmpFiles.topics);
         var posts = require(this.config.ubbTmpFiles.posts);
 
         var self = this;
@@ -716,43 +710,43 @@ module.exports = {
         // iterate over each
         _topics.forEach(function(key, ti){
             // get the data from db
-            var data = topics[key];
+            var topic = topics[key];
 
-            var categoryId = self.ubbToNbbMap.categories[data.forumId].cid;
-            var uid = self.ubbToNbbMap.users[data.userId].uid;
-            var content = htmlToMarkdown(posts[data.postId].body);
-            var title = data.title ? data.subject[0].toUpperCase() + data.title.substr(1) : "Untitled";
+            var _t_ = {
+                categoryId: self.ubbToNbbMap.categories[topic._forumId].cid,
+                uid: self.ubbToNbbMap.users[topic._userId].uid,
+                content: self.hazHtml(posts[topic.postId]._body || "") ? htmlToMarkdown(posts[topic.postId]._body || "") : posts[topic.postId]._body || "",
+                title: topic._title ? topic._title[0].toUpperCase() + topic._title.substr(1) : "Untitled",
 
-            logger.debug(" saving topic: " + title);
-            Topics.create(uid, title, content, categoryId, function(err, ret){
-                if (err) throw err;
+                // from s to ms
+                timestamp: topic._datetime * 1000,
 
-                ret.topicData._redirect = {
-                    from: "[YOUR_UBB_PATH]/ubbthreads.php/topics/" + data.ofid + "/*",
-                    to: "[YOUR_NBB_PATH]/topic/" + ret.topicData.tid + "/" + ret.topicData.slug
-                };
+                viewcount: topic._views,
+                pinned: topic._pinned
+            };
 
-                ret.topicData = $.extend({}, ret.topicData, {timestamp: data.datetime, viewcount: data.views, pinned: data.pinned});
+            logger.debug("saving topic: " + _t_.title);
+            Topics.create(_t_.uid, _t_.title, _t_.content, _t_.categoryId, function(err, ret){
+                if (err) {
+                    logger.error(err);
+                } else {
+                    logger.debug("topic: " + ret.topicData.title + " saved [" + ti + "]");
+                    ret.topicData.redirectRule = self.redirectRule("topics/" + topic._ofid + "/", "topic/" + ret.topicData.tid + "/" + ret.topicData.slug);
+                    ret.topicData = $.extend({}, ret.topicData, _t_);
 
-                Topics.setTopicField(ret.topicData.tid, "timestamp", data.datetime);
-                Topics.setTopicField(ret.topicData.tid, "viewcount", data.views);
-                Topics.setTopicField(ret.topicData.tid, "pinned", data.pinned);
+                    Topics.setTopicField(ret.topictopic.tid, "timestamp", _t_.timestamp);
+                    Topics.setTopicField(ret.topictopic.tid, "viewcount", _t_.viewcount);
+                    Topics.setTopicField(ret.topictopic.tid, "pinned", _t_.pinned);
 
-                // save a reference from the old category to the new one
-                self.ubbToNbbMap.topics[data.ofid] = ret.topicData;
-                logger.debug("[redirect]" + ret.topicData._redirect.from + " ---> " + ret.topicData._redirect.to);
+                    // save a reference from the old category to the new one
+                    self.ubbToNbbMap.topics[topic._ofid] = ret.topicData;
+
+                    // is this the last one?
+                    if (ti == _topics.length - 1) {
+                        self.saveMap(self.config.nbbTmpFiles.topics, self.ubbToNbbMap.topics, _topics.length, " NBB Topics ", next);
+                    }
+                }
             });
-        });
-
-        this.slowWriteJSONtoFile(this.config.nbbTmpFiles.topics, this.ubbToNbbMap.topics, function(err){
-            if(!err) {
-                logger.debug(" " + _topics.length + " NBB Topics saved, MAP in " + self.config.nbbTmpFiles.topics);
-
-                if (typeof next == "function")
-                    next();
-            } else {
-                logger.debug(" Could not write NBB Topics " + err);
-            }
         });
     },
 
@@ -766,52 +760,52 @@ module.exports = {
         // iterate over each
         _posts.forEach(function(key, pi){
             // get the data from db
-            var data = posts[key];
-
-            var tid = self.ubbToNbbMap.topics[data.topicId].tid;
-            var uid = self.ubbToNbbMap.users[data.userId].uid;
-            var content = htmlToMarkdown(data.body);
+            var post = posts[key];
 
             // if this is a topic post, used for the topic's content
-            if (data.parent == 0) return;
+            if (post._parent == 0) return;
 
-            logger.debug(" saving topic: " + data.opid);
-            Posts.create(uid, tid, content, function(err, postData){
-                if (err) throw err;
+            // from s to ms
+            var time = post._datetime * 1000;
+            var _p_ = {
+                tid: self.ubbToNbbMap.topics[post._topicId].tid,
+                uid: self.ubbToNbbMap.users[post._userId].uid,
+                content: self.hazHtml(post._body || "") ? htmlToMarkdown(post._body || "") : post._body || "",
+                timestamp: time,
+                relativeTime: new Date(time).toISOString()
+            };
 
-                postData._redirect = {
-                    from: "[YOUR_UBB_PATH]/ubbthreads.php/topics/" + data.topicId + "/*#Post" + data.opid,
-                    to: "[YOUR_NBB_PATH]/topic/" + tid + "#" + postData.pid
-                };
+            logger.debug(" saving post: " + post._opid);
+            Posts.create(_p_.uid, _p_.tid, _p_.content, function(err, postData){
+                if (err) {
+                    logger.error(err);
+                } else {
+                    logger.debug("post: " + postData.pid + " saved [" + pi + "]");
+                    postData.redirectRule = self.redirectRule("topics/" + post._topicId+ "/(.)*#Post" + post_opid, "topic/" + tid + "#" + postData.pid);
 
-                var relativeTime = new Date(data.datetime).toISOString();
-                postData = $.extend({}, ret.topicData, {timestamp: data.datetime, relativeTime: relativeTime});
+                    postData = $.extend({}, post, postData);
 
-                Posts.setPostField(ret.topicData.tid, "timestamp", data.datetime);
-                Posts.setPostField(ret.topicData.tid, "relativeTime", relativeTime);
+                    Posts.setPostField(postData.pid, "timestamp", _p_.timestamp, function (){
+                        Posts.setPostField(postData.pid, "relativeTime", _p_.relativeTime, function (){
 
-                // save a reference from the old category to the new one
-                self.ubbToNbbMap.posts[data.opid] = postData;
-                logger.debug("[redirect]" + postData._redirect.from + " ---> " + postData._redirect.to);
+                            // save a reference from the old category to the new one
+                            self.ubbToNbbMap.posts[post._opid] = postData;
+
+                            // is this the last one?
+                            if (pi == _posts.length - 1) {
+                                self.saveMap(self.config.nbbTmpFiles.posts, self.ubbToNbbMap.posts, _posts.length, " NBB Posts ", next);
+                            }
+                        });
+                    });
+                }
             });
-        });
-
-        this.slowWriteJSONtoFile(this.config.nbbTmpFiles.posts, this.ubbToNbbMap.posts, function(err){
-            if(!err) {
-                logger.debug(" " + _posts.length + " NBB Posts saved, MAP in " + self.config.nbbTmpFiles.posts);
-
-                if (typeof next == "function")
-                    next();
-            } else {
-                logger.debug(" Could not write NBB Posts " + err);
-            }
         });
     },
 
 // helpers
 
     exit: function(code){
-        logger.info("Exiting...");
+        logger.info("Exiting ... ");
         this.ubbDisconnect();
         process.exit(this.isNumber(code) ? code : 0);
     },
@@ -851,9 +845,14 @@ module.exports = {
     },
 
 // yea, for faster lookup
-    _convertListToMap: function(list, key){
+    _convertListToMap: function(list, key, fn){
         var map = {};
+        var f = typeof fn == "function";
+
         list.forEach(function(item) {
+            if (f)
+                item = fn(item);
+
             map[item[key]] = item;
         });
         return map;

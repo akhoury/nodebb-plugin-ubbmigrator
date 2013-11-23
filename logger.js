@@ -38,5 +38,8 @@ module.exports = {
     },
     debug: function(s){
             console.log(this.p + "[debug] " + s);
+    },
+    important: function(s){
+            console.log(this.p + "[important] " + s);
     }
 };
