@@ -43,7 +43,7 @@ ubb.migrate({
         categories: false,
         forums: false,
         topics: false,
-        posts: true
+        posts: false
     },
     // don't put anything to nbb db
     dontSaveToNbb: false,

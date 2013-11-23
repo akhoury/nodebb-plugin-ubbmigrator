@@ -21,7 +21,7 @@
 
 var User, Topics, Posts, Categories, RDB;
 
-// todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's working for some reason
+// todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's not
 try {
     User = module.parent.require('./user.js');
     Topics = module.parent.require('./topics.js');
@@ -550,8 +550,7 @@ module.exports = {
                 logger.info("Topics query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
                 self.ubbData.topics = self._convertListToMap(rows, "_otid");
-
-                self.saveMap(self.config.ubbTmpFiles.topics, self.ubbData.topics, rows.length, " UBB Topics ", next);
+                next();
             });
     },
 
@@ -567,11 +566,18 @@ module.exports = {
                 + (self.config.ubbqTestLimit.posts ? " LIMIT " + self.config.ubbqTestLimit.posts : ""),
 
             function(err, rows){
-                logger.debug(" Posts query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
+                logger.info("Posts query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.posts = self._convertListToMap(rows, "_opid");
+                self.ubbData.posts = self._convertListToMap(rows, "_opid", function(item){
+                    if (item._parent == 0 && item._topicId && self.ubbData.topics[item._topicId]) {
+                        self.ubbData.topics[item._topicId]._firstPost = item;
+                    }
+                    return item;
+                });
 
-                self.saveMap(self.config.ubbTmpFiles.posts, self.ubbData.posts, rows.length, " UBB Posts ", next);
+                self.saveMap(self.config.ubbTmpFiles.topics, self.ubbData.topics, "a large number of", " UBB Topics ", function(){
+                    self.saveMap(self.config.ubbTmpFiles.posts, self.ubbData.posts, rows.length, " UBB Posts ", next);
+                });
             });
     },
 
@@ -702,7 +708,7 @@ module.exports = {
     nbbSaveTopics: function(next){
         // topics chez nbb are forums chez ubb
         var topics = require(this.config.ubbTmpFiles.topics);
-        var posts = require(this.config.ubbTmpFiles.posts);
+        // var posts = require(this.config.ubbTmpFiles.posts);
 
         var self = this;
         var _topics = Object.keys(topics);
@@ -712,10 +718,15 @@ module.exports = {
             // get the data from db
             var topic = topics[key];
 
+            if (!topic._firstPost || !topic._forumId || !topic._userId) {
+                logger.warn("Skipping topic: " + topic_otid + " titled: " + topic._title);
+                return;
+            }
+
             var _t_ = {
                 categoryId: self.ubbToNbbMap.categories[topic._forumId].cid,
                 uid: self.ubbToNbbMap.users[topic._userId].uid,
-                content: self.hazHtml(posts[topic.postId]._body || "") ? htmlToMarkdown(posts[topic.postId]._body || "") : posts[topic.postId]._body || "",
+                content: self.hazHtml(topic._firstPost._body || "") ? htmlToMarkdown(topic._firstPost._body || "") : topic._firstPost._body || "",
                 title: topic._title ? topic._title[0].toUpperCase() + topic._title.substr(1) : "Untitled",
 
                 // from s to ms
@@ -762,8 +773,15 @@ module.exports = {
             // get the data from db
             var post = posts[key];
 
+
+            var topic = self.ubbToNbbMap.topics[post._topicId];
+            var user = self.ubbToNbbMap.users[post._userId];
+
             // if this is a topic post, used for the topic's content
-            if (post._parent == 0) return;
+            if (post._parent == 0 || !topic || !user) {
+                logger.warn("Skipping post: " + post._opid);
+                return;
+            }
 
             // from s to ms
             var time = post._datetime * 1000;
