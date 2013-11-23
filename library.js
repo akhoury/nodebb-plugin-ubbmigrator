@@ -718,7 +718,7 @@ module.exports = {
             // get the data from db
             var topic = topics[key];
 
-            if (!topic._firstPost || !topic._forumId || !topic._userId) {
+            if (!topic._firstPost || !topic._forumId || !topic._userId || self.ubbToNbbMap.users[topic._userId] || self.ubbToNbbMap.categories[topic._forumId]) {
                 logger.warn("Skipping topic: " + topic_otid + " titled: " + topic._title);
                 return;
             }
@@ -778,7 +778,7 @@ module.exports = {
             var user = self.ubbToNbbMap.users[post._userId];
 
             // if this is a topic post, used for the topic's content
-            if (post._parent == 0 || !topic || !user) {
+            if (post._parent == 0 || !topic || !user || !post._body) {
                 logger.warn("Skipping post: " + post._opid);
                 return;
             }
@@ -788,7 +788,7 @@ module.exports = {
             var _p_ = {
                 tid: self.ubbToNbbMap.topics[post._topicId].tid,
                 uid: self.ubbToNbbMap.users[post._userId].uid,
-                content: self.hazHtml(post._body || "") ? htmlToMarkdown(post._body || "") : post._body || "",
+                content: self.hazHtml(post._body) ? htmlToMarkdown(post._body) : post._body,
                 timestamp: time,
                 relativeTime: new Date(time).toISOString()
             };
