@@ -719,7 +719,7 @@ module.exports = {
             var topic = topics[key];
 
             if (!topic._firstPost || !topic._forumId || !topic._userId || self.ubbToNbbMap.users[topic._userId] || self.ubbToNbbMap.categories[topic._forumId]) {
-                logger.warn("Skipping topic: " + topic_otid + " titled: " + topic._title);
+                logger.warn("Skipping topic: " + topic._otid + " titled: " + topic._title);
                 return;
             }
 
@@ -793,7 +793,7 @@ module.exports = {
                 relativeTime: new Date(time).toISOString()
             };
 
-            logger.debug(" saving post: " + post._opid);
+            logger.debug("saving post: " + post._opid);
             Posts.create(_p_.uid, _p_.tid, _p_.content, function(err, postData){
                 if (err) {
                     logger.error(err);
