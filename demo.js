@@ -1,7 +1,7 @@
 var ubb = require("./library.js");
 ubb.migrate({
 
-    log: "",
+    log: "debug",
 
     // ubb db config
     ubbDbConfig: {
