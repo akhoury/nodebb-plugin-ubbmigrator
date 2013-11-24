@@ -69,7 +69,13 @@ var
 // my quick logger
     Logger = require("./logger.js"),
 //later to be initialized with config in init()
-    logger;
+    logger,
+
+    administrators = {
+        gid: 1,
+        list: []
+    },
+    moderators = {};
 
 module.exports = {
 
@@ -232,6 +238,10 @@ module.exports = {
                 len: 13
             },
 
+            // to be randomly selected from migrating the ubb.forums
+            nbbCategoriesColorClasses: ["category-darkblue", "category-blue", "category-purple"],
+            nbbCategoriesIcons: ["icon-comment"],
+
             nginx: {
                 // if you want to append the each generated nginx rewrite rute to a file, enter the path of the file here
                 // if you add "info" to the log config i,e "error,info" you will see the resulted logs in stdout
@@ -256,6 +266,12 @@ module.exports = {
             next();
     },
 
+    setupNbbGroups: function(next){
+        Groups.getGidFromName("Administrators", function(err, gid) {
+            administrators.gid = gid;
+
+        });
+    },
     backupNbbConfigs: function(next, cb){
         var self = this;
         RDB.hgetall("config", function(err, data){
@@ -279,7 +295,7 @@ module.exports = {
     },
 
     restoreNbbConfigs: function(next){
-        RDB.hmset("config", this.config.nbbConfigs, function(){
+        RDB.hmset("config", this.config.nbbConfigs, function(err){
             next();
         });
     },
@@ -691,7 +707,7 @@ module.exports = {
                     logger.error(err);
                 } else {
                     logger.debug("category: " + category.name + " saved [" + ci + "]");
-                    categoryData.redirectRule = self.redirectRule("forums/" + category._ofid + "/", "category/" + categoryData.cid + "/" + categoryData.slug);
+                    categoryData.redirectRule = self.redirectRule("forums/" + category._ofid + "/", "category/" + categoryData.slug);
 
                     category = $.extend({}, category, categoryData);
 
