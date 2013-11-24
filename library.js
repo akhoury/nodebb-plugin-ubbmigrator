@@ -19,10 +19,11 @@
 "use strict";
 
 
-var User, Topics, Posts, Categories, RDB;
+var Groups, User, Topics, Posts, Categories, RDB;
 
 // todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's not
 try {
+    Groups = module.parent.require('./groups.js');
     User = module.parent.require('./user.js');
     Topics = module.parent.require('./topics.js');
     Posts = module.parent.require('./posts.js');
@@ -30,6 +31,7 @@ try {
     RDB = module.parent.require('./redis.js');
 } catch (e) {
     console.log("HA! ");
+    Groups = require('../../src/groups.js');
     User = require('../../src/user.js');
     Topics = require('../../src/topics.js');
     Posts = require('../../src/posts.js');
