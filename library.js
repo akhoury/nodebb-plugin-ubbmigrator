@@ -109,57 +109,52 @@ module.exports = {
                 self.setupNbbGroups(next);
             },
             function (next) {
-                if (self.config.skip.users || self.config.dontGetFromUbb) {
+                if (self.config.dontGetFromUbb) {
                     logger.debug("Skipping ubbGetUsers()");
                     next();
-                }
-                else{
+                } else{
                     logger.debug("ubbGetUsers()");
                     self.ubbGetUsers(next);
                 }
             },
             function (next) {
-                if (self.config.skip.categories || self.config.dontGetFromUbb) {
+                if (self.config.dontGetFromUbb) {
                     logger.debug("Skipping ubbGetCategories()");
                     next();
-                }
-                else{
+                } else{
                     logger.debug("ubbGetCategories()");
                     self.ubbGetCategories(next);
                 }
             },
             function (next) {
-                if (self.config.skip.forums || self.config.dontGetFromUbb) {
+                if (self.config.dontGetFromUbb) {
                     logger.debug("Skipping ubbGetForums()");
                     next();
-                }
-                else{
+                } else{
                     logger.debug("ubbGetForums()");
                     self.ubbGetForums(next);
                 }
             },
             function (next) {
-                if (self.config.skip.topics || self.config.dontGetFromUbb) {
+                if (self.config.dontGetFromUbb) {
                     logger.debug("Skipping ubbGetTopics()");
                     next();
-                }
-                else{
+                } else{
                     logger.debug("ubbGetTopics()");
                     self.ubbGetTopics(next);
                 }
             },
             function (next) {
-                if (self.config.skip.posts || self.config.dontGetFromUbb) {
+                if (self.config.dontGetFromUbb) {
                     logger.debug("Skipping ubbGetPosts()");
                     next();
-                }
-                else{
+                } else{
                     logger.debug("ubbGetPosts()");
                     self.ubbGetPosts(next);
                 }
             },
             function(next) {
-                if (self.config.skip.users || self.config.dontSaveToNbb) {
+                if (self.config.dontSaveToNbb) {
                     logger.debug("Skipping nbbSaveUsers()");
                     next();
                 } else {
@@ -169,7 +164,7 @@ module.exports = {
             },
             function(next) {
                 // ubb.forums ===> nbb.categories
-                if (self.config.skip.forums || self.config.dontSaveToNbb) {
+                if (self.config.dontSaveToNbb) {
                     logger.debug("Skipping nbbSaveCategories()");
                     next();
                 } else {
@@ -178,7 +173,7 @@ module.exports = {
                 }
             },
             function(next) {
-                if (self.config.skip.topics || self.config.dontSaveToNbb) {
+                if (self.config.dontSaveToNbb) {
                     logger.debug("Skipping nbbSaveTopics()");
                     next();
                 } else {
@@ -187,7 +182,7 @@ module.exports = {
                 }
             },
             function(next) {
-                if (self.config.skip.posts || self.config.dontSaveToNbb) {
+                if (self.config.dontSaveToNbb) {
                     logger.debug("Skipping nbbSavePosts()");
                     next();
                 } else {
@@ -237,14 +232,6 @@ module.exports = {
                 forums: null,
                 topics: null,
                 posts: null
-            },
-
-            skip: {
-                users: false,
-                categories: false,
-                forums: false,
-                topics: false,
-                posts: false
             },
 
             // meaning this will reuse the ubb tmp files
@@ -584,7 +571,7 @@ module.exports = {
                 if (err) throw err;
                 self.ubbData.categories = self._convertListToMap(rows, "_ocid");
 
-                self.saveMap(self.config.ubbTmpFiles.categories, self.ubbData.categories, rows.length, " UBB Categories ", next);
+                self.saveMap(self.config.ubbTmpFiles.categories, self.ubbData.categories, rows.length, "UBB Categories", next);
 
             });
     },
@@ -603,7 +590,7 @@ module.exports = {
                 if (err) throw err;
                 self.ubbData.forums = self._convertListToMap(rows, "_ofid");
 
-                self.saveMap(self.config.ubbTmpFiles.forums, self.ubbData.forums, rows.length, " UBB Forums ", next);
+                self.saveMap(self.config.ubbTmpFiles.forums, self.ubbData.forums, rows.length, "UBB Forums", next);
             });
     },
 
@@ -649,9 +636,9 @@ module.exports = {
                     return item;
                 });
 
-                self.saveMap(self.config.ubbTmpFiles.topics, self.ubbData.topics, "a large number of", " UBB Topics ", function(){
+                self.saveMap(self.config.ubbTmpFiles.topics, self.ubbData.topics, "a large number of", "UBB Topics", function(){
                     logger.info("hang on now writing posts to tmp dir... that could take a while.");
-                    self.saveMap(self.config.ubbTmpFiles.posts, self.ubbData.posts, rows.length, " UBB Posts ", next);
+                    self.saveMap(self.config.ubbTmpFiles.posts, self.ubbData.posts, rows.length, "UBB Posts", next);
                 });
             });
     },
@@ -748,7 +735,7 @@ module.exports = {
         // just save a copy in my big ubbToNbbMap for later, minus the correct website and avatar, who cares for now.
         this.slowWriteJSONtoFile(file, map, function(_err) {
             if (!_err)
-                logger.info(length + wat + " saved, MAP in " + file);
+                logger.info(length + " " + wat + " saved, MAP in " + file);
             else
                 logger.error("Could not write NBB Users " + _err);
 
@@ -799,7 +786,7 @@ module.exports = {
                 }
                 // is this the last one?
                 if (ci == _categories.length - 1) {
-                    self.saveMap(self.config.nbbTmpFiles.categories, self.ubbToNbbMap.categories, _categories.length, " NBB Categories ", next, "_ofid");
+                    self.saveMap(self.config.nbbTmpFiles.categories, self.ubbToNbbMap.categories, _categories.length, "NBB Categories", next, "_ofid");
                 }
             })
         });
@@ -823,7 +810,7 @@ module.exports = {
             var topic = topics[key];
 
             if (!topic._firstPost || !topic._forumId || !topic._userId || !users[topic._userId] || !categories[topic._forumId] || !topic._firstPost._body) {
-                var requiredValues = [topic._firstPost, topic._forumId, topic._userId, users[topic._userId], categories[topic._forumId], topic._firstPost._body];
+                var requiredValues = [topic._firstPost, topic._forumId, topic._userId, users[topic._userId], categories[topic._forumId], (topic._firstPost || {})._body];
                 var requiredKeys = ["topic._firstPost", "topic._forumId", "topic._userId", "users[topic._userId]", "categories[topic._forumId]", "topic._firstPost._body"];
                 var falsyIndex = self.whichIsFalsy(requiredValues);
                 logger.warn("Skipping topic: " + topic._otid + " titled: " + topic._title + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
@@ -848,7 +835,6 @@ module.exports = {
                 if (err) {
                     logger.error(err);
                 } else {
-                    logger.debug("topic: " + ret.topicData.title + " saved [" + ti + "]");
                     ret.topicData.redirectRule = self.redirectRule("topics/" + topic._ofid + "/", "topic/" + ret.topicData.tid + "/" + ret.topicData.slug);
                     ret.topicData = $.extend({}, ret.topicData, _t_);
 
@@ -861,7 +847,7 @@ module.exports = {
 
                     // is this the last one?
                     if (ti == _topics.length - 1) {
-                        self.saveMap(self.config.nbbTmpFiles.topics, self.ubbToNbbMap.topics, _topics.length, " NBB Topics ", next, "_otid");
+                        self.saveMap(self.config.nbbTmpFiles.topics, self.ubbToNbbMap.topics, _topics.length, "NBB Topics", next, "_otid");
                     }
                 }
             });
@@ -920,7 +906,7 @@ module.exports = {
 
                             // is this the last one?
                             if (pi == _posts.length - 1) {
-                                self.saveMap(self.config.nbbTmpFiles.posts, self.ubbToNbbMap.posts, _posts.length, " NBB Posts ", next);
+                                self.saveMap(self.config.nbbTmpFiles.posts, self.ubbToNbbMap.posts, _posts.length, "NBB Posts", next);
                             }
                         });
                     });
