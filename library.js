@@ -19,11 +19,12 @@
 "use strict";
 
 
-var Groups, User, Topics, Posts, Categories, RDB;
+var Groups, Meta, User, Topics, Posts, Categories, RDB;
 
 // todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's not
 try {
     Groups = module.parent.require('./groups.js');
+    Meta = module.parent.require('./meta.js');
     User = module.parent.require('./user.js');
     Topics = module.parent.require('./topics.js');
     Posts = module.parent.require('./posts.js');
@@ -32,6 +33,7 @@ try {
 } catch (e) {
     console.log("HA! ");
     Groups = require('../../src/groups.js');
+    Meta = require('../../src/meta.js');
     User = require('../../src/user.js');
     Topics = require('../../src/topics.js');
     Posts = require('../../src/posts.js');
@@ -71,11 +73,12 @@ var
 //later to be initialized with config in init()
     logger,
 
-    administrators = {
-        gid: 1,
-        list: []
-    },
-    moderators = {};
+    nbbData = {
+        groups: {
+            Administrators: {},
+            Moderators: {}
+        }
+    };
 
 module.exports = {
 
@@ -87,7 +90,23 @@ module.exports = {
             },
             function(next){
                 logger.debug("setup()");
-                self.setup(next);
+                self.initialSetup(next);
+            },
+            function(next){
+                logger.debug("backupNbbConfigs()");
+                self.backupNbbConfigs(next);
+            },
+            function(next){
+                logger.debug("tempSetNbbConfigs()");
+                self.tempSetNbbConfigs(next);
+            },
+            function(next){
+                logger.debug("emptyNbbDefaultCategories()");
+                self.emptyNbbDefaultCategories(next);
+            },
+            function(next){
+                logger.debug("setupNbbGroups()");
+                self.setupNbbGroups(next);
             },
             function (next) {
                 if (self.config.skip.users || self.config.dontGetFromUbb) {
@@ -242,20 +261,20 @@ module.exports = {
             nbbCategoriesColorClasses: ["category-darkblue", "category-blue", "category-purple"],
             nbbCategoriesIcons: ["icon-comment"],
 
-            nginx: {
-                // if you want to append the each generated nginx rewrite rute to a file, enter the path of the file here
-                // if you add "info" to the log config i,e "error,info" you will see the resulted logs in stdout
-                writeTo: null,
-                // this may not be neccessary
-                pathsEncodeURI: false,
+            nbbAutoConfirmEmails: true,
 
+            // will create a nbb group for the ubb migrated moderators
+            ubbToNbbModeratorsGroupName : "GoldModerators",
+            ubbToNbbModeratorsGroupDescription: "Old timers forums moderators",
+            // per nbb default setup, 1000+ reputation makes you a moderator
+            ubbToNbbModeratorsAddedReputation: 1000,
+
+            nginx: {
                 // ONLY replace the MY_UBB_PATH and MY_NBB_PATH and leave the ${FROM} and ${TO} as they will be replaced appropriately
+                // or i guess if you know what you're doing then modify at will
                 // example: rewrite ^/MY_UBB_PATH/users/123(.*)$ /MY_NBB_PATH/user/elvis/$1 last;
                 rule: " rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;"
-            },
-
-            // defaults to 1000 by NodeBB, if you have it different, pass it in the config.
-            moderatorReputationThreshold: 1000
+            }
 
         }, config);
 
@@ -266,41 +285,7 @@ module.exports = {
             next();
     },
 
-    setupNbbGroups: function(next){
-        Groups.getGidFromName("Administrators", function(err, gid) {
-            administrators.gid = gid;
-
-        });
-    },
-    backupNbbConfigs: function(next, cb){
-        var self = this;
-        RDB.hgetall("config", function(err, data){
-            self.config.nbbConfigs = data || {};
-            cb(next)
-        });
-    },
-    tempSetNbbConfigs: function(next){
-        var nbbTempConfigs = this.config.nbbConfigs;
-
-        // yea.. i dont know .. i have a bad feeling about this
-        nbbTempConfigs.postDelay = 0;
-        nbbTempConfigs.minimumPostLength = 1;
-        nbbTempConfigs.minimumTitleLength = 1;
-        nbbTempConfigs.maximumUsernameLength = 50;
-        nbbTempConfigs.maximumProfileImageSize = 1024;
-
-        RDB.hmset("config", nbbTempConfigs, function(){
-            next();
-        });
-    },
-
-    restoreNbbConfigs: function(next){
-        RDB.hmset("config", this.config.nbbConfigs, function(err){
-            next();
-        });
-    },
-
-    setup: function(next){
+    initialSetup: function(next){
         var self = this;
 
         // create a map from ubb ids to new nbb data
@@ -341,9 +326,80 @@ module.exports = {
 
         fs.createFileSync(this.config.ubbToNbbMapFile);
 
+        next();
+    },
+
+
+    emptyNbbDefaultCategories: function(next){
+
         // deleting the first 12 default categories by nbb
-        RDB.del("category:1 category:2 category:3 category:4 category:5 category:6 category:7 category:8 category:9 category:10 category:11 category:12", function(){
-            self.backupNbbConfigs(next, self.tempSetNbbConfigs.bind(self));
+        RDB.keys("category:*", function(err, arr) {
+            arr.forEach(function(k){
+                RDB.del(k);
+            });
+            RDB.del("categories:cid", function(){
+                next();
+            });
+        });
+    },
+
+    setupNbbGroups: function(next){
+        var self = this;
+        Groups.getGidFromName("Administrators", function(err, gid) {
+            // save a reference for the admins gid
+            nbbData.groups.Administrators.gid = gid;
+            // create an moderators group from the users who are ubb Moderators
+            Groups.create(self.config.ubbToNbbModeratorsGroupName, self.config.ubbToNbbModeratorsGroupDescription, function(err, group) {
+                if (err) {
+                    if (err.message == "group-exists") {
+                        Groups.getGidFromName(self.config.ubbToNbbModeratorsGroupName, function(err, gid){
+                            // save a reference to the gid to use it when needed, bro
+                            nbbData.groups.Moderators.gid = gid;
+                            next();
+                        });
+                    }
+                } else {
+                    // save a reference to the gid to use it when needed, bro
+                    nbbData.groups.Moderators.gid = group.gid;
+                    next();
+                }
+            });
+
+        });
+    },
+
+    backupNbbConfigs: function(next){
+        var self = this;
+        RDB.hgetall("config", function(err, data){
+            self.config.nbbConfigs = data || {};
+            next();
+        });
+    },
+
+    tempSetNbbConfigs: function(next){
+        var nbbTempConfigs = this.config.nbbConfigs;
+
+        // yea.. i dont know .. i have a bad feeling about this
+        nbbTempConfigs.postDelay = 0;
+        nbbTempConfigs.minimumPostLength = 1;
+        nbbTempConfigs.minimumTitleLength = 1;
+        nbbTempConfigs.maximumUsernameLength = 50;
+        nbbTempConfigs.maximumProfileImageSize = 1024;
+
+        // if you want to auto confirm email, set the host to null, if there is any
+        // this will prevent User.sendConfirmationEmail from setting expiration time on the email address
+        // per https://github.com/designcreateplay/NodeBB/blob/master/src/user.js#L458
+        if (this.config.nbbAutoConfirmEmails)
+            nbbTempConfigs['email:smtp:host'] = null;
+
+        RDB.hmset("config", nbbTempConfigs, function(){
+            next();
+        });
+    },
+
+    restoreNbbConfigs: function(next){
+        RDB.hmset("config", this.config.nbbConfigs, function(){
+            next();
         });
     },
 
@@ -578,7 +634,7 @@ module.exports = {
         this.ubbq(
             "SELECT POST_ID as _opid, POST_PARENT_ID as _parent, POST_PARENT_USER_ID as _parentUserId, TOPIC_ID as _topicId,"
                 + " POST_POSTED_TIME as _datetime, POST_SUBJECT as _subject,"
-                + " POST_BODY as _body, POST_DEFAULT_BODY as _defaultBody, USER_ID as _userId,"
+                + " POST_BODY as _body, USER_ID as _userId,"
                 + " POST_MARKUP_TYPE as _markup, POST_IS_APPROVED as _approved"
                 + " FROM " + self.config.ubbTablePrefix + "POSTS"
                 + (self.config.ubbqTestLimit.posts ? " LIMIT " + self.config.ubbqTestLimit.posts : ""),
@@ -594,6 +650,7 @@ module.exports = {
                 });
 
                 self.saveMap(self.config.ubbTmpFiles.topics, self.ubbData.topics, "a large number of", " UBB Topics ", function(){
+                    logger.info("hang on now writing posts to tmp dir... that could take a while.");
                     self.saveMap(self.config.ubbTmpFiles.posts, self.ubbData.posts, rows.length, " UBB Posts ", next);
                 });
             });
@@ -611,18 +668,31 @@ module.exports = {
             // get the data from db
             var user = users[key];
 
-            logger.debug("creating user: " + user.username + " [" + ui + "]");
+            logger.debug("[idx: " + ui + "] saving user: " + user.username);
             User.create(user.username, user.password, user.email, function(err, uid) {
                 if (err) {
                     logger.error(" username: " + user.username + " cannot be saved in nbb db. " + err);
                 } else {
-                    logger.debug(user.username + " [" + uid + "] created.");
                     // saving that for the map
                     user.uid = uid;
                     // back to the real email
                     user.email = user._email;
 
-                    logger.debug("setting user fields : " + user.username + " [" + ui + "]");
+                    var reputation = 0;
+                    if (user._level == "Moderator") {
+                        reputation = self.config.ubbToNbbModeratorsAddedReputation + user._rating;
+                        Groups.join(nbbData.groups.Moderators.gid, uid, function(){
+                            logger.info(user.username + " became a moderator");
+                        });
+                    } else if (user._level == "Administrator") {
+                        reputation = self.config.ubbToNbbModeratorsAddedReputation + user._rating;
+                        Groups.join(nbbData.groups.Administrators.gid, uid, function(){
+                            logger.info(user.username + " became an Administrator");
+                        });
+                    } else {
+                        reputation = user._rating || 0;
+                    }
+
                     // set some of the fields got from the ubb
                     var _u_ = {
                         // preseve the signature and website if there is any
@@ -637,9 +707,10 @@ module.exports = {
                         // now I set the real email back in
                         email: user._email,
                         // that's the best I could come up with I guess
-                        reputation: user._level == "Moderator" || user._level == "Administrator" ? (self.config.moderatorReputationThreshold + user._rating) || 0 : user._rating || 0,
+                        reputation: reputation || 0,
                         profileviews: user._totalRates
                     };
+
 
                     if (user.avatar) {
                         _u_.gravatarpicture = user.avatar;
@@ -651,16 +722,29 @@ module.exports = {
                     self.ubbToNbbMap.users[user._ouid] = user;
                     User.setUserFields(uid, _u_);
 
+                    if (self.config.nbbAutoConfirmEmails)
+                        RDB.set('email:' + user.email + ':confirm', true);
+
                     if (ui == _users.length - 1) {
-                        //last one done.
-                        self.saveMap(self.config.nbbTmpFiles.users, self.ubbToNbbMap.users, _users.length, "NBB Users", next);
+
+                        if (self.config.nbbAutoConfirmEmails)
+                            RDB.keys("confirm:*:email", function(err, keys){
+                                keys.forEach(function(key){
+                                    RDB.del(key);
+                                });
+                            });
+
+                        self.saveMap(self.config.nbbTmpFiles.users, self.ubbToNbbMap.users, _users.length, "NBB Users", next, "_ouid");
+
                     }
                 }
             });
         });
     },
 
-    saveMap: function(file, map, length, wat, next){
+    saveMap: function(file, map, length, wat, next, key) {
+        if (typeof map == "array" && key)
+            map = this._convertListToMap(map, key);
         // just save a copy in my big ubbToNbbMap for later, minus the correct website and avatar, who cares for now.
         this.slowWriteJSONtoFile(file, map, function(_err) {
             if (!_err)
@@ -692,8 +776,8 @@ module.exports = {
             var category = categories[key];
 
             // set some defaults since i don't have them
-            category.icon = "icon-comment";
-            category.blockclass = "category-blue";
+            category.icon = self.config.nbbCategoriesIcons[Math.floor(Math.random()*self.config.nbbCategoriesIcons.length)];
+            category.blockclass = self.config.nbbCategoriesColorClasses[Math.floor(Math.random()*self.config.nbbCategoriesColorClasses.length)];
 
             // order based on index i guess
             category.order = ci + 1;
@@ -701,12 +785,11 @@ module.exports = {
             category.name = category._name;
             category.description = category._description;
 
-            logger.debug(" saving category: " + category.name);
+            logger.debug("[idx:" + ci + "] saving category: " + category.name);
             Categories.create(category, function(err, categoryData) {
                 if (err) {
                     logger.error(err);
                 } else {
-                    logger.debug("category: " + category.name + " saved [" + ci + "]");
                     categoryData.redirectRule = self.redirectRule("forums/" + category._ofid + "/", "category/" + categoryData.slug);
 
                     category = $.extend({}, category, categoryData);
@@ -716,7 +799,7 @@ module.exports = {
                 }
                 // is this the last one?
                 if (ci == _categories.length - 1) {
-                    self.saveMap(self.config.nbbTmpFiles.categories, self.ubbToNbbMap.categories, _categories.length, " NBB Categories ", next);
+                    self.saveMap(self.config.nbbTmpFiles.categories, self.ubbToNbbMap.categories, _categories.length, " NBB Categories ", next, "_ofid");
                 }
             })
         });
@@ -726,24 +809,30 @@ module.exports = {
     nbbSaveTopics: function(next){
         // topics chez nbb are forums chez ubb
         var topics = require(this.config.ubbTmpFiles.topics);
+        var users = require(this.config.nbbTmpFiles.users);
+        var categories = require(this.config.nbbTmpFiles.categories);
+
         // var posts = require(this.config.ubbTmpFiles.posts);
 
         var self = this;
         var _topics = Object.keys(topics);
 
         // iterate over each
-        _topics.forEach(function(key, ti){
+        _topics.forEach(function(key, ti) {
             // get the data from db
             var topic = topics[key];
 
-            if (!topic._firstPost || !topic._forumId || !topic._userId || self.ubbToNbbMap.users[topic._userId] || self.ubbToNbbMap.categories[topic._forumId]) {
-                logger.warn("Skipping topic: " + topic._otid + " titled: " + topic._title);
+            if (!topic._firstPost || !topic._forumId || !topic._userId || !users[topic._userId] || !categories[topic._forumId] || !topic._firstPost._body) {
+                var requiredValues = [topic._firstPost, topic._forumId, topic._userId, users[topic._userId], categories[topic._forumId], topic._firstPost._body];
+                var requiredKeys = ["topic._firstPost", "topic._forumId", "topic._userId", "users[topic._userId]", "categories[topic._forumId]", "topic._firstPost._body"];
+                var falsyIndex = self.whichIsFalsy(requiredValues);
+                logger.warn("Skipping topic: " + topic._otid + " titled: " + topic._title + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
                 return;
             }
 
             var _t_ = {
-                categoryId: self.ubbToNbbMap.categories[topic._forumId].cid,
-                uid: self.ubbToNbbMap.users[topic._userId].uid,
+                categoryId: categories[topic._forumId].cid,
+                uid: users[topic._userId].uid,
                 content: self.hazHtml(topic._firstPost._body || "") ? htmlToMarkdown(topic._firstPost._body || "") : topic._firstPost._body || "",
                 title: topic._title ? topic._title[0].toUpperCase() + topic._title.substr(1) : "Untitled",
 
@@ -754,8 +843,8 @@ module.exports = {
                 pinned: topic._pinned
             };
 
-            logger.debug("saving topic: " + _t_.title);
-            Topics.create(_t_.uid, _t_.title, _t_.content, _t_.categoryId, function(err, ret){
+            logger.debug("[idx:" + ti + "] saving topic: " + _t_.title);
+            Topics.post(_t_.uid, _t_.title, _t_.content, _t_.categoryId, function(err, ret){
                 if (err) {
                     logger.error(err);
                 } else {
@@ -772,7 +861,7 @@ module.exports = {
 
                     // is this the last one?
                     if (ti == _topics.length - 1) {
-                        self.saveMap(self.config.nbbTmpFiles.topics, self.ubbToNbbMap.topics, _topics.length, " NBB Topics ", next);
+                        self.saveMap(self.config.nbbTmpFiles.topics, self.ubbToNbbMap.topics, _topics.length, " NBB Topics ", next, "_otid");
                     }
                 }
             });
@@ -791,13 +880,15 @@ module.exports = {
             // get the data from db
             var post = posts[key];
 
-
             var topic = self.ubbToNbbMap.topics[post._topicId];
             var user = self.ubbToNbbMap.users[post._userId];
 
             // if this is a topic post, used for the topic's content
-            if (post._parent == 0 || !topic || !user || !post._body) {
-                logger.warn("Skipping post: " + post._opid);
+            if (!post._parent || !topic || !user || !post._body) {
+                var requiredValues = [post._parent, topic, user, post_body];
+                var requiredKeys = ["post._parent", "topic", "user", "post_.body"];
+                var falsyIndex = self.whichIsFalsy(requiredValues);
+                logger.warn("Skipping post: " + post._opid + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
                 return;
             }
 
@@ -854,6 +945,14 @@ module.exports = {
 // query ubb mysql database
     ubbq: function(q, callback){
         this.ubbConnection.query(q, callback);
+    },
+
+    whichIsFalsy: function(arr){
+        for (var i = 0; i < arr.length; i++) {
+            if (!arr[i])
+                return i;
+        }
+        return null;
     },
 
 // writing json to file slowly, prop by prop to avoid Out of memory errors
