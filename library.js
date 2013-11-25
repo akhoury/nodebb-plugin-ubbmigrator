@@ -819,7 +819,7 @@ module.exports = {
                             logger.error(err);
                             save();
                         } else {
-                            ret.topicData.redirectRule = self.redirectRule("topics/" + topic._otid + "/", "topic/" + ret.topicData.tid + "/" + ret.topicData.slug);
+                            ret.topicData.redirectRule = self.redirectRule("topics/" + topic._otid + "/", "topic/" + ret.topicData.slug);
                             ret.topicData = $.extend({}, ret.topicData, _t_);
 
                             Topics.setTopicField(ret.topicData.tid, "timestamp", _t_.timestamp);
