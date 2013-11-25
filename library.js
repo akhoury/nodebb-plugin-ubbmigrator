@@ -852,8 +852,6 @@ module.exports = {
                 // get the data from db
                 var post = posts[key];
 
-                console.log(self.ubbToNbbMap.topics);
-
                 var topic = self.ubbToNbbMap.topics[post._topicId];
                 var user = self.ubbToNbbMap.users[post._userId];
 
@@ -868,6 +866,7 @@ module.exports = {
 
                     // from s to ms
                     var time = post._datetime * 1000;
+
                     var _p_ = {
                         tid: self.ubbToNbbMap.topics[post._topicId].tid,
                         uid: self.ubbToNbbMap.users[post._userId].uid,
@@ -881,8 +880,8 @@ module.exports = {
                         if (err) {
                             logger.error(err);
                         } else {
-                            logger.debug("post: " + postData.pid + " saved [" + pi + "]");
-                            postData.redirectRule = self.redirectRule("topics/" + post._topicId + "/(.)*#Post" + post._opid, "topic/" + tid + "#" + postData.pid);
+
+                            postData.redirectRule = self.redirectRule("topics/" + post._topicId + "/(.)*#Post" + post._opid, "topic/" + _p_.tid + "#" + postData.pid);
 
                             postData = $.extend({}, post, postData);
 
