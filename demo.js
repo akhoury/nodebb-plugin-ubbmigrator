@@ -32,19 +32,14 @@ ubb.migrate({
     ubbTablePrefix: "ubbt_",
 
     // the stuff below for dev purposes, take them out
-    // hard limit on the posts since they're huge
-    ubbqTestLimit: {
-        users: null,// 10000
-        posts: null// 10000
+    // hard timestamp in seconds limit on some stuff since they're huge
+    ubbqTestLimitToBeforeTimestampSeconds: {
+        // before 2004 sometime
+        users: 1081478244,
+        topics: 1049942244,
+        posts: 1049942244
     },
-    // skip any of the these from get and put?
-    skip: {
-        users: false,
-        categories: false,
-        forums: false,
-        topics: false,
-        posts: false
-    },
+
     // don't put anything to nbb db
     dontSaveToNbb: false,
     dontGetFromUbb: false

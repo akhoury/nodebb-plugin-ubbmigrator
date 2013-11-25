@@ -19,11 +19,11 @@
 "use strict";
 
 
-var Groups, Meta, User, Topics, Posts, Categories, RDB;
+var Group, Meta, User, Topics, Posts, Categories, RDB;
 
 // todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's not
 try {
-    Groups = module.parent.require('./groups.js');
+    Group = module.parent.require('./groups.js');
     Meta = module.parent.require('./meta.js');
     User = module.parent.require('./user.js');
     Topics = module.parent.require('./topics.js');
@@ -32,7 +32,7 @@ try {
     RDB = module.parent.require('./redis.js');
 } catch (e) {
     console.log("HA! ");
-    Groups = require('../../src/groups.js');
+    Group = require('../../src/groups.js');
     Meta = require('../../src/meta.js');
     User = require('../../src/user.js');
     Topics = require('../../src/topics.js');
@@ -226,7 +226,7 @@ module.exports = {
             },
             ubbToNbbMapFile: "./tmp/ubbToNbbMap.json",
 
-            ubbqTestLimit: {
+            ubbqTestLimitToBeforeTimestampSeconds: {
                 users: null,
                 categories: null,
                 forums: null,
@@ -332,14 +332,14 @@ module.exports = {
 
     setupNbbGroups: function(next){
         var self = this;
-        Groups.getGidFromName("Administrators", function(err, gid) {
+        Group.getGidFromName("Administrators", function(err, gid) {
             // save a reference for the admins gid
             nbbData.groups.Administrators.gid = gid;
             // create an moderators group from the users who are ubb Moderators
-            Groups.create(self.config.ubbToNbbModeratorsGroupName, self.config.ubbToNbbModeratorsGroupDescription, function(err, group) {
+            Group.create(self.config.ubbToNbbModeratorsGroupName, self.config.ubbToNbbModeratorsGroupDescription, function(err, group) {
                 if (err) {
                     if (err.message == "group-exists") {
-                        Groups.getGidFromName(self.config.ubbToNbbModeratorsGroupName, function(err, gid){
+                        Group.getGidFromName(self.config.ubbToNbbModeratorsGroupName, function(err, gid){
                             // save a reference to the gid to use it when needed, bro
                             nbbData.groups.Moderators.gid = gid;
                             next();
@@ -392,55 +392,44 @@ module.exports = {
 
     // get ubb users
     ubbGetUsers: function(next) {
-        var self = this;
+        var self = this, prefix = self.config.ubbTablePrefix;
         this.ubbq(
-            "SELECT USER_ID as _ouid, USER_LOGIN_NAME as _username, USER_DISPLAY_NAME as _userDisplayName, USER_REGISTRATION_EMAIL as _email,"
-                + " USER_MEMBERSHIP_LEVEL as _level, USER_REGISTERED_ON as _joindate,"
-                + " USER_IS_APPROVED as _approved, USER_IS_banned as _banned"
-                + " FROM " + self.config.ubbTablePrefix + "USERS"
-                + (self.config.ubbqTestLimit.users ? " LIMIT " + self.config.ubbqTestLimit.users : ""),
+            "SELECT "
+                + prefix + "USERS.USER_ID as _ouid, "
+                + prefix + "USERS.USER_LOGIN_NAME as _username, "
+                + prefix + "USERS.USER_DISPLAY_NAME as _userDisplayName, "
+                + prefix + "USERS.USER_REGISTRATION_EMAIL as _email, "
+                + prefix + "USERS.USER_MEMBERSHIP_LEVEL as _level, "
+                + prefix + "USERS.USER_REGISTERED_ON as _joindate, "
+                + prefix + "USERS.USER_IS_APPROVED as _approved, "
+                + prefix + "USERS.USER_IS_banned as _banned, "
+
+                + prefix + "USER_PROFILE.USER_SIGNATURE as _signature, "
+                + prefix + "USER_PROFILE.USER_HOMEPAGE as _website, "
+                + prefix + "USER_PROFILE.USER_OCCUPATION as _occupation, "
+                + prefix + "USER_PROFILE.USER_LOCATION as _location, "
+                + prefix + "USER_PROFILE.USER_AVATAR as _avatar, "
+                + prefix + "USER_PROFILE.USER_TITLE as _title, "
+                + prefix + "USER_PROFILE.USER_POSTS_PER_TOPIC as _postsPerTopic, "
+                + prefix + "USER_PROFILE.USER_TEMPORARY_PASSWORD as _tempPassword, "
+                + prefix + "USER_PROFILE.USER_TOTAL_POSTS as _totalPosts, "
+                + prefix + "USER_PROFILE.USER_RATING as _rating, "
+                + prefix + "USER_PROFILE.USER_TOTAL_RATES as _totalRates, "
+                + prefix + "USER_PROFILE.USER_BIRTHDAY as _birthday, "
+                + prefix + "USER_PROFILE.USER_UNVERIFIED_EMAIL as _unverifiedEmail "
+
+                + "FROM " + prefix + "USERS, " + prefix + "USER_PROFILE "
+                + "WHERE " + prefix + "USERS.USER_ID = " + prefix + "USER_PROFILE.USER_ID "
+                + (self.config.ubbqTestLimitToBeforeTimestampSeconds.users ?
+                "AND " + prefix + "USERS.USER_REGISTERED_ON < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.users : ""),
 
             function(err, rows){
-                self.ubbData.users = self.ubbData.users.concat(rows);
-                self.ubbData.users = self._convertListToMap(self.ubbData.users, "_ouid");
-                // todo: combine the usersProfiles and users in one query, seriously bro?
-                self.ubbGetUsersProfiles(next);
-            });
-    },
-
-    // get ubb users profiles
-    ubbGetUsersProfiles: function(next) {
-        var self = this;
-        this.ubbq(
-            "SELECT USER_ID as _ouid, USER_SIGNATURE as _signature, USER_HOMEPAGE as _website,"
-                + " USER_OCCUPATION as _occupation, USER_LOCATION as _location,"
-                + " USER_AVATAR as _avatar, USER_TITLE as _title,"
-                + " USER_POSTS_PER_TOPIC as _postsPerTopic, USER_TEMPORARY_PASSWORD as _tempPassword,"
-                + " USER_TOTAL_POSTS as _totalPosts, USER_RATING as _rating,"
-                + " USER_TOTAL_RATES as _totalRates, USER_BIRTHDAY as _birthday,"
-                + " USER_UNVERIFIED_EMAIL as _unverifiedEmail"
-                + " FROM " + self.config.ubbTablePrefix + "USER_PROFILE"
-                + (self.config.ubbqTestLimit.users ? " LIMIT " + self.config.ubbqTestLimit.users : ""),
-
-            function(err, rows){
-                if (err) throw err;
-
-                logger.info("UsersProfiles query came back with " + rows.length + " records, now filtering then writing to tmp dir, please be patient.");
-                self.ubbData.usersProfiles = rows;
-
-                self.ubbData.usersProfiles.forEach(function(profile){
-                    // merging the userProfiles with users
-                    self.ubbData.users[profile._ouid] = $.extend({}, profile, self.ubbData.users[profile._ouid]);
-                });
-
+                self.ubbData.users = self._convertListToMap(rows, "_ouid");
                 self._ubbNormalizeUsers(self.ubbData.users);
                 self._ubbMarkdownUsersSignatures();
-
-                if(typeof next == "function")
-                    next();
+                next();
             });
     },
-
 
     _makeValidNbbUsername: function(_username, _userDisplayName, _ouid) {
         var self = this
@@ -562,10 +551,8 @@ module.exports = {
     ubbGetCategories: function(next) {
         var self = this;
         this.ubbq(
-            "SELECT CATEGORY_ID as _ocid, CATEGORY_TITLE as _name, CATEGORY_DESCRIPTION as _description"
-                + " FROM " + self.config.ubbTablePrefix + "CATEGORIES"
-                + (self.config.ubbqTestLimit.categories ? " LIMIT " + self.config.ubbqTestLimit.categories : ""),
-
+            "SELECT CATEGORY_ID as _ocid, CATEGORY_TITLE as _name, CATEGORY_DESCRIPTION as _description "
+                + "FROM " + self.config.ubbTablePrefix + "CATEGORIES ",
             function(err, rows){
                 logger.info("Categories query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
@@ -580,16 +567,16 @@ module.exports = {
     ubbGetForums: function(next) {
         var self = this;
         this.ubbq(
-            "SELECT FORUM_ID as _ofid, FORUM_TITLE as _name, FORUM_DESCRIPTION as _description,"
-                + " CATEGORY_ID as _categoryId, FORUM_CREATED_ON as _datetime"
-                + " FROM " + self.config.ubbTablePrefix + "FORUMS"
-                + (self.config.ubbqTestLimit.forums ? " LIMIT " + self.config.ubbqTestLimit.forums : ""),
+            "SELECT FORUM_ID as _ofid, FORUM_TITLE as _name, FORUM_DESCRIPTION as _description, "
+                + "CATEGORY_ID as _categoryId, FORUM_CREATED_ON as _datetime "
+                + "FROM " + self.config.ubbTablePrefix + "FORUMS "
+                + (self.config.ubbqTestLimitToBeforeTimestampSeconds.forums ?
+                "WHERE FORUM_CREATED_ON < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.forums : ""),
 
             function(err, rows){
                 logger.info("Forums query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
                 self.ubbData.forums = self._convertListToMap(rows, "_ofid");
-
                 self.saveMap(self.config.ubbTmpFiles.forums, self.ubbData.forums, rows.length, "UBB Forums", next);
             });
     },
@@ -598,14 +585,15 @@ module.exports = {
     ubbGetTopics: function(next) {
         var self = this;
         this.ubbq(
-            "SELECT TOPIC_ID as _otid, FORUM_ID as _forumId, POST_ID as _postId,"
-                + " USER_ID as _userId, TOPIC_VIEWS as _views,"
-                + " TOPIC_SUBJECT as _title, TOPIC_REPLIES as _replies,"
-                + " TOPIC_TOTAL_RATES as _totalRates, TOPIC_RATING as _rating,"
-                + " TOPIC_CREATED_TIME as _datetime, TOPIC_IS_APPROVED as _approved,"
-                + " TOPIC_STATUS as _status, TOPIC_IS_STICKY as _pinned"
-                + " FROM " + self.config.ubbTablePrefix + "TOPICS"
-                + (self.config.ubbqTestLimit.topics ? " LIMIT " + self.config.ubbqTestLimit.topics : ""),
+            "SELECT TOPIC_ID as _otid, FORUM_ID as _forumId, POST_ID as _postId, "
+                + " USER_ID as _userId, TOPIC_VIEWS as _views, "
+                + " TOPIC_SUBJECT as _title, TOPIC_REPLIES as _replies, "
+                + " TOPIC_TOTAL_RATES as _totalRates, TOPIC_RATING as _rating, "
+                + " TOPIC_CREATED_TIME as _datetime, TOPIC_IS_APPROVED as _approved, "
+                + " TOPIC_STATUS as _status, TOPIC_IS_STICKY as _pinned "
+                + " FROM " + self.config.ubbTablePrefix + "TOPICS "
+                + (self.config.ubbqTestLimitToBeforeTimestampSeconds.topics ?
+                "WHERE TOPIC_CREATED_TIME < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.topics : ""),
 
             function(err, rows){
                 logger.info("Topics query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
@@ -619,14 +607,16 @@ module.exports = {
     ubbGetPosts: function(next) {
         var self = this;
         this.ubbq(
-            "SELECT POST_ID as _opid, POST_PARENT_ID as _parent, POST_PARENT_USER_ID as _parentUserId, TOPIC_ID as _topicId,"
-                + " POST_POSTED_TIME as _datetime, POST_SUBJECT as _subject,"
-                + " POST_BODY as _body, USER_ID as _userId,"
-                + " POST_MARKUP_TYPE as _markup, POST_IS_APPROVED as _approved"
-                + " FROM " + self.config.ubbTablePrefix + "POSTS"
-                + (self.config.ubbqTestLimit.posts ? " LIMIT " + self.config.ubbqTestLimit.posts : ""),
+            "SELECT POST_ID as _opid, POST_PARENT_ID as _parent, POST_PARENT_USER_ID as _parentUserId, TOPIC_ID as _topicId, "
+                + "POST_POSTED_TIME as _datetime, POST_SUBJECT as _subject, "
+                + "POST_BODY as _body, USER_ID as _userId, "
+                + "POST_MARKUP_TYPE as _markup, POST_IS_APPROVED as _approved "
+                + "FROM " + self.config.ubbTablePrefix + "POSTS "
+                + (self.config.ubbqTestLimitToBeforeTimestampSeconds.posts ?  "WHERE POST_POSTED_TIME < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.posts : ""),
 
             function(err, rows){
+                console.log(err);
+
                 logger.info("Posts query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
                 self.ubbData.posts = self._convertListToMap(rows, "_opid", function(item){
@@ -651,14 +641,14 @@ module.exports = {
 
 
         // iterate over each
-        _users.forEach(function(key, ui) {
+        async.eachSeries(_users, function(key, save) {
             // get the data from db
             var user = users[key];
 
-            logger.debug("[idx: " + ui + "] saving user: " + user.username);
+            logger.debug("[idx: " + key + "] saving user: " + user.username);
             User.create(user.username, user.password, user.email, function(err, uid) {
                 if (err) {
-                    logger.error(" username: " + user.username + " cannot be saved in nbb db. " + err);
+                    logger.error(" username: " + user.username + " -- " + err);
                 } else {
                     // saving that for the map
                     user.uid = uid;
@@ -668,12 +658,12 @@ module.exports = {
                     var reputation = 0;
                     if (user._level == "Moderator") {
                         reputation = self.config.ubbToNbbModeratorsAddedReputation + user._rating;
-                        Groups.join(nbbData.groups.Moderators.gid, uid, function(){
+                        Group.join(nbbData.groups.Moderators.gid, uid, function(){
                             logger.info(user.username + " became a moderator");
                         });
                     } else if (user._level == "Administrator") {
                         reputation = self.config.ubbToNbbModeratorsAddedReputation + user._rating;
-                        Groups.join(nbbData.groups.Administrators.gid, uid, function(){
+                        Group.join(nbbData.groups.Administrators.gid, uid, function(){
                             logger.info(user.username + " became an Administrator");
                         });
                     } else {
@@ -711,21 +701,19 @@ module.exports = {
 
                     if (self.config.nbbAutoConfirmEmails)
                         RDB.set('email:' + user.email + ':confirm', true);
-
-                    if (ui == _users.length - 1) {
-
-                        if (self.config.nbbAutoConfirmEmails)
-                            RDB.keys("confirm:*:email", function(err, keys){
-                                keys.forEach(function(key){
-                                    RDB.del(key);
-                                });
-                            });
-
-                        self.saveMap(self.config.nbbTmpFiles.users, self.ubbToNbbMap.users, _users.length, "NBB Users", next, "_ouid");
-
-                    }
                 }
+                save();
             });
+        }, function(){
+
+            if (self.config.nbbAutoConfirmEmails)
+                RDB.keys("confirm:*:email", function(err, keys){
+                    keys.forEach(function(key){
+                        RDB.del(key);
+                    });
+                });
+
+            self.saveMap(self.config.nbbTmpFiles.users, self.ubbToNbbMap.users, _users.length, "NBB Users", next, "_ouid");
         });
     },
 
@@ -746,7 +734,7 @@ module.exports = {
 
     redirectRule: function(from, to) {
         var res = this.config.nginx.rule.replace("${FROM}", from).replace("${TO}", to);
-        logger.important(res);
+        logger.info(res);
         return res;
     },
 
@@ -756,9 +744,10 @@ module.exports = {
         var categories = require(this.config.ubbTmpFiles.forums);
         var self = this;
         var _categories = Object.keys(categories);
+        var _order = 0;
 
         // iterate over each
-        _categories.forEach(function(key, ci){
+        async.eachSeries(_categories, function(key, save) {
             // get the data from db
             var category = categories[key];
 
@@ -767,12 +756,12 @@ module.exports = {
             category.blockclass = self.config.nbbCategoriesColorClasses[Math.floor(Math.random()*self.config.nbbCategoriesColorClasses.length)];
 
             // order based on index i guess
-            category.order = ci + 1;
+            category.order = _order + 1;
 
             category.name = category._name;
             category.description = category._description;
 
-            logger.debug("[idx:" + ci + "] saving category: " + category.name);
+            logger.debug("[idx:" + key + "] saving category: " + category.name);
             Categories.create(category, function(err, categoryData) {
                 if (err) {
                     logger.error(err);
@@ -784,11 +773,10 @@ module.exports = {
                     // save a reference from the old category to the new one
                     self.ubbToNbbMap.categories[category._ofid] = category;
                 }
-                // is this the last one?
-                if (ci == _categories.length - 1) {
-                    self.saveMap(self.config.nbbTmpFiles.categories, self.ubbToNbbMap.categories, _categories.length, "NBB Categories", next, "_ofid");
-                }
+                save();
             })
+        }, function(){
+                self.saveMap(self.config.nbbTmpFiles.categories, self.ubbToNbbMap.categories, _categories.length, "NBB Categories", next, "_ofid");
         });
     },
 
@@ -804,54 +792,52 @@ module.exports = {
         var self = this;
         var _topics = Object.keys(topics);
 
-        // iterate over each
-        _topics.forEach(function(key, ti) {
-            // get the data from db
-            var topic = topics[key];
+        async.eachSeries(_topics, function(key, save) {
+                // get the data from db
+                var topic = topics[key];
 
-            if (!topic._firstPost || !topic._forumId || !topic._userId || !users[topic._userId] || !categories[topic._forumId] || !topic._firstPost._body) {
-                var requiredValues = [topic._firstPost, topic._forumId, topic._userId, users[topic._userId], categories[topic._forumId], (topic._firstPost || {})._body];
-                var requiredKeys = ["topic._firstPost", "topic._forumId", "topic._userId", "users[topic._userId]", "categories[topic._forumId]", "topic._firstPost._body"];
-                var falsyIndex = self.whichIsFalsy(requiredValues);
-                logger.warn("Skipping topic: " + topic._otid + " titled: " + topic._title + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
-                return;
-            }
-
-            var _t_ = {
-                categoryId: categories[topic._forumId].cid,
-                uid: users[topic._userId].uid,
-                content: self.hazHtml(topic._firstPost._body || "") ? htmlToMarkdown(topic._firstPost._body || "") : topic._firstPost._body || "",
-                title: topic._title ? topic._title[0].toUpperCase() + topic._title.substr(1) : "Untitled",
-
-                // from s to ms
-                timestamp: topic._datetime * 1000,
-
-                viewcount: topic._views,
-                pinned: topic._pinned
-            };
-
-            logger.debug("[idx:" + ti + "] saving topic: " + _t_.title);
-            Topics.post(_t_.uid, _t_.title, _t_.content, _t_.categoryId, function(err, ret){
-                if (err) {
-                    logger.error(err);
+                if (!topic._firstPost || !topic._forumId || !topic._userId || !users[topic._userId] || !categories[topic._forumId] || !topic._firstPost._body) {
+                    var requiredValues = [topic._firstPost, topic._forumId, topic._userId, users[topic._userId], categories[topic._forumId], (topic._firstPost || {})._body];
+                    var requiredKeys = ["topic._firstPost", "topic._forumId", "topic._userId", "users[topic._userId]", "categories[topic._forumId]", "topic._firstPost._body"];
+                    var falsyIndex = self.whichIsFalsy(requiredValues);
+                    logger.warn("Skipping topic: " + topic._otid + " titled: " + topic._title + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
+                    save();
                 } else {
-                    ret.topicData.redirectRule = self.redirectRule("topics/" + topic._ofid + "/", "topic/" + ret.topicData.tid + "/" + ret.topicData.slug);
-                    ret.topicData = $.extend({}, ret.topicData, _t_);
 
-                    Topics.setTopicField(ret.topictopic.tid, "timestamp", _t_.timestamp);
-                    Topics.setTopicField(ret.topictopic.tid, "viewcount", _t_.viewcount);
-                    Topics.setTopicField(ret.topictopic.tid, "pinned", _t_.pinned);
+                    var _t_ = {
+                        categoryId: categories[topic._forumId].cid,
+                        uid: users[topic._userId].uid,
+                        content: self.hazHtml(topic._firstPost._body || "") ? htmlToMarkdown(topic._firstPost._body || "") : topic._firstPost._body || "",
+                        title: topic._title ? topic._title[0].toUpperCase() + topic._title.substr(1) : "Untitled",
+                        // from s to ms
+                        timestamp: topic._datetime * 1000,
+                        viewcount: topic._views,
+                        pinned: topic._pinned
+                    };
 
-                    // save a reference from the old category to the new one
-                    self.ubbToNbbMap.topics[topic._ofid] = ret.topicData;
+                    logger.debug("[idx:" + key + "] saving topic: " + _t_.title);
+                    Topics.post(_t_.uid, _t_.title, _t_.content, _t_.categoryId, function(err, ret){
+                        if (err) {
+                            logger.error(err);
+                        } else {
+                            ret.topicData.redirectRule = self.redirectRule("topics/" + topic._otid + "/", "topic/" + ret.topicData.tid + "/" + ret.topicData.slug);
+                            ret.topicData = $.extend({}, ret.topicData, _t_);
 
-                    // is this the last one?
-                    if (ti == _topics.length - 1) {
-                        self.saveMap(self.config.nbbTmpFiles.topics, self.ubbToNbbMap.topics, _topics.length, "NBB Topics", next, "_otid");
-                    }
+                            Topics.setTopicField(ret.topicData.tid, "timestamp", _t_.timestamp);
+                            Topics.setTopicField(ret.topicData.tid, "viewcount", _t_.viewcount);
+                            Topics.setTopicField(ret.topicData.tid, "pinned", _t_.pinned);
+
+                            // save a reference from the old category to the new one
+                            self.ubbToNbbMap.topics[topic._otid] = ret.topicData;
+                        }
+                        save();
+                    });
                 }
-            });
-        });
+            },
+            function (){
+                self.saveMap(self.config.nbbTmpFiles.topics, self.ubbToNbbMap.topics, _topics.length, "NBB Topics", next, "_otid");
+            }
+        );
     },
 
 // save the UBB posts to nbb's redis
@@ -862,57 +848,59 @@ module.exports = {
         var _posts = Object.keys(posts);
 
         // iterate over each
-        _posts.forEach(function(key, pi){
-            // get the data from db
-            var post = posts[key];
+        async.eachSeries(_posts, function(key, save) {
+                // get the data from db
+                var post = posts[key];
 
-            var topic = self.ubbToNbbMap.topics[post._topicId];
-            var user = self.ubbToNbbMap.users[post._userId];
+                console.log(self.ubbToNbbMap.topics);
 
-            // if this is a topic post, used for the topic's content
-            if (!post._parent || !topic || !user || !post._body) {
-                var requiredValues = [post._parent, topic, user, post_body];
-                var requiredKeys = ["post._parent", "topic", "user", "post_.body"];
-                var falsyIndex = self.whichIsFalsy(requiredValues);
-                logger.warn("Skipping post: " + post._opid + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
-                return;
-            }
+                var topic = self.ubbToNbbMap.topics[post._topicId];
+                var user = self.ubbToNbbMap.users[post._userId];
 
-            // from s to ms
-            var time = post._datetime * 1000;
-            var _p_ = {
-                tid: self.ubbToNbbMap.topics[post._topicId].tid,
-                uid: self.ubbToNbbMap.users[post._userId].uid,
-                content: self.hazHtml(post._body) ? htmlToMarkdown(post._body) : post._body,
-                timestamp: time,
-                relativeTime: new Date(time).toISOString()
-            };
-
-            logger.debug("saving post: " + post._opid);
-            Posts.create(_p_.uid, _p_.tid, _p_.content, function(err, postData){
-                if (err) {
-                    logger.error(err);
+                // if this is a topic post, used for the topic's content
+                if (!post._parent || !topic || !user || !post._body) {
+                    var requiredValues = [post._parent, topic, user, post._body];
+                    var requiredKeys = ["post._parent", "topic", "user", "post_.body"];
+                    var falsyIndex = self.whichIsFalsy(requiredValues);
+                    logger.warn("Skipping post: " + post._opid + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
+                    save();
                 } else {
-                    logger.debug("post: " + postData.pid + " saved [" + pi + "]");
-                    postData.redirectRule = self.redirectRule("topics/" + post._topicId+ "/(.)*#Post" + post_opid, "topic/" + tid + "#" + postData.pid);
 
-                    postData = $.extend({}, post, postData);
+                    // from s to ms
+                    var time = post._datetime * 1000;
+                    var _p_ = {
+                        tid: self.ubbToNbbMap.topics[post._topicId].tid,
+                        uid: self.ubbToNbbMap.users[post._userId].uid,
+                        content: self.hazHtml(post._body) ? htmlToMarkdown(post._body) : post._body,
+                        timestamp: time,
+                        relativeTime: new Date(time).toISOString()
+                    };
 
-                    Posts.setPostField(postData.pid, "timestamp", _p_.timestamp, function (){
-                        Posts.setPostField(postData.pid, "relativeTime", _p_.relativeTime, function (){
+                    logger.debug("[idx:" + key + "] saving post: " + post._opid);
+                    Posts.create(_p_.uid, _p_.tid, _p_.content, function(err, postData){
+                        if (err) {
+                            logger.error(err);
+                        } else {
+                            logger.debug("post: " + postData.pid + " saved [" + pi + "]");
+                            postData.redirectRule = self.redirectRule("topics/" + post._topicId + "/(.)*#Post" + post._opid, "topic/" + tid + "#" + postData.pid);
 
-                            // save a reference from the old category to the new one
-                            self.ubbToNbbMap.posts[post._opid] = postData;
+                            postData = $.extend({}, post, postData);
 
-                            // is this the last one?
-                            if (pi == _posts.length - 1) {
-                                self.saveMap(self.config.nbbTmpFiles.posts, self.ubbToNbbMap.posts, _posts.length, "NBB Posts", next);
-                            }
-                        });
+                            Posts.setPostField(postData.pid, "timestamp", _p_.timestamp, function (){
+                                Posts.setPostField(postData.pid, "relativeTime", _p_.relativeTime, function (){
+
+                                    // save a reference from the old category to the new one
+                                    self.ubbToNbbMap.posts[post._opid] = postData;
+                                });
+                            });
+                        }
+                        save();
                     });
                 }
+            },
+            function(){
+                self.saveMap(self.config.nbbTmpFiles.posts, self.ubbToNbbMap.posts, _posts.length, "NBB Posts", next);
             });
-        });
     },
 
 // helpers
