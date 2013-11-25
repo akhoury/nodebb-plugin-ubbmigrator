@@ -1,4 +1,9 @@
-##NOT READY YET - I AM GETTING THERE - DO NOT USE YET - CHECK BACK IN A WEEK
+##NOT READY YET
+
+##DO NOT USE YET
+unless you have a small ubb forum
+
+##CHECK BACK SOON
 
 nodebb-plugin-ubbmigrator
 =========================

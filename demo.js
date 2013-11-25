@@ -35,9 +35,9 @@ ubb.migrate({
     // hard timestamp in seconds limit on some stuff since they're huge
     ubbqTestLimitToBeforeTimestampSeconds: {
         // before 2004 sometime
-        users: null, //1081478244,
-        topics: null, //1049942244,
-        posts: null //1049942244
+        users: 1104537600, // null, //1081478244,
+        topics: 1104537600, // null, //1049942244,
+        posts: 1104537600, // null //1049942244
     },
 
     // don't put anything to nbb db
