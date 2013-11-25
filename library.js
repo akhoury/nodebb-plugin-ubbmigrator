@@ -377,7 +377,7 @@ module.exports = {
         // this will prevent User.sendConfirmationEmail from setting expiration time on the email address
         // per https://github.com/designcreateplay/NodeBB/blob/master/src/user.js#L458
         if (this.config.nbbAutoConfirmEmails)
-            nbbTempConfigs['email:smtp:host'] = null;
+            nbbTempConfigs['email:smtp:host'] = "this.host.is.set.by.ubbmigrator.todisable.email.confirmation";
 
         RDB.hmset("config", nbbTempConfigs, function(){
             next();
@@ -476,14 +476,8 @@ module.exports = {
                     // from unix timestamp (s) to JS timestamp (ms)
                     user._joindate = user._joindate * 1000;
 
-                    // lower case the email as well, but I won't use it for the creation of the user
-                    // nbb tries to send an email at the creation of the user account
-                    // so after looking at nbb source, it looks like i can get away with setting some
-                    // email that doesn't work, but still validates, then after I set it back to the original email
-                    user._email = user._email.toLowerCase();
-                    // todo: i should probably move that to a config, just in case you don't want to do that
-                    // also that will mess up the gravatar generated url, so I fix that at the end of each iteration, keep scrolling
-                    user.email = "aaa." + user._ouid + "@aaa.aaa";
+                    // lower case the email as well
+                    user.email = user._email.toLowerCase();
 
                     // I don't know about you about I noticed a lot my users have incomplete urls
                     //user.avatar = self._isValidUrl(user._avatar) ? user._avatar : "";
@@ -652,8 +646,6 @@ module.exports = {
                 } else {
                     // saving that for the map
                     user.uid = uid;
-                    // back to the real email
-                    user.email = user._email;
 
                     var reputation = 0;
                     if (user._level == "Moderator") {
@@ -681,13 +673,10 @@ module.exports = {
                         location: user._location || "",
                         // preserse the  joindate, luckily here, ubb uses timestamps too
                         joindate: user._joindate,
-                        // now I set the real email back in
-                        email: user._email,
                         // that's the best I could come up with I guess
                         reputation: reputation || 0,
                         profileviews: user._totalRates
                     };
-
 
                     if (user.avatar) {
                         _u_.gravatarpicture = user.avatar;
@@ -712,7 +701,6 @@ module.exports = {
                         RDB.del(key);
                     });
                 });
-
             self.saveMap(self.config.nbbTmpFiles.users, self.ubbToNbbMap.users, _users.length, "NBB Users", next, "_ouid");
         });
     },
@@ -756,7 +744,7 @@ module.exports = {
             category.blockclass = self.config.nbbCategoriesColorClasses[Math.floor(Math.random()*self.config.nbbCategoriesColorClasses.length)];
 
             // order based on index i guess
-            category.order = _order + 1;
+            category.order = _order++ + 1;
 
             category.name = category._name;
             category.description = category._description;
@@ -796,6 +784,13 @@ module.exports = {
                 // get the data from db
                 var topic = topics[key];
 
+                // if that's the *DoNotDelete* use created by ubb, then let's assign that post to the initial user by nbb
+                if (!users[topic._userId] && topic._userId == 1) {
+                    users[topic._userId] = {
+                        uid: 1
+                    };
+                }
+
                 if (!topic._firstPost || !topic._forumId || !topic._userId || !users[topic._userId] || !categories[topic._forumId] || !topic._firstPost._body) {
                     var requiredValues = [topic._firstPost, topic._forumId, topic._userId, users[topic._userId], categories[topic._forumId], (topic._firstPost || {})._body];
                     var requiredKeys = ["topic._firstPost", "topic._forumId", "topic._userId", "users[topic._userId]", "categories[topic._forumId]", "topic._firstPost._body"];
@@ -804,13 +799,16 @@ module.exports = {
                     save();
                 } else {
 
+                    // from s to ms
+                    var time = topic._datetime * 1000;
+
                     var _t_ = {
                         categoryId: categories[topic._forumId].cid,
                         uid: users[topic._userId].uid,
                         content: self.hazHtml(topic._firstPost._body || "") ? htmlToMarkdown(topic._firstPost._body || "") : topic._firstPost._body || "",
                         title: topic._title ? topic._title[0].toUpperCase() + topic._title.substr(1) : "Untitled",
-                        // from s to ms
-                        timestamp: topic._datetime * 1000,
+                        timestamp: time,
+                        relativeTime: new Date(time).toISOString(),
                         viewcount: topic._views,
                         pinned: topic._pinned
                     };
@@ -819,6 +817,7 @@ module.exports = {
                     Topics.post(_t_.uid, _t_.title, _t_.content, _t_.categoryId, function(err, ret){
                         if (err) {
                             logger.error(err);
+                            save();
                         } else {
                             ret.topicData.redirectRule = self.redirectRule("topics/" + topic._otid + "/", "topic/" + ret.topicData.tid + "/" + ret.topicData.slug);
                             ret.topicData = $.extend({}, ret.topicData, _t_);
@@ -827,10 +826,14 @@ module.exports = {
                             Topics.setTopicField(ret.topicData.tid, "viewcount", _t_.viewcount);
                             Topics.setTopicField(ret.topicData.tid, "pinned", _t_.pinned);
 
-                            // save a reference from the old category to the new one
-                            self.ubbToNbbMap.topics[topic._otid] = ret.topicData;
+                            Posts.setPostField(ret.postData.pid, "timestamp", _t_.timestamp, function (){
+                                Posts.setPostField(ret.postData.pid, "relativeTime", _t_.relativeTime, function (){
+                                    // save a reference from the old category to the new one
+                                    self.ubbToNbbMap.topics[topic._otid] = ret.topicData;
+                                    save();
+                                });
+                            });
                         }
-                        save();
                     });
                 }
             },
@@ -851,6 +854,13 @@ module.exports = {
         async.eachSeries(_posts, function(key, save) {
                 // get the data from db
                 var post = posts[key];
+
+                // if that's the *DoNotDelete* use created by ubb, then let's assign that post to the initial user by nbb
+                if (!self.ubbToNbbMap.users[post._userId] && post._userId == 1) {
+                    self.ubbToNbbMap.users[post._userId] = {
+                        uid: 1
+                    };
+                }
 
                 var topic = self.ubbToNbbMap.topics[post._topicId];
                 var user = self.ubbToNbbMap.users[post._userId];
