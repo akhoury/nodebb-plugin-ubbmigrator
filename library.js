@@ -49,27 +49,27 @@ try {
 
 var
 
-    // nodebb utils, useful
+// nodebb utils, useful
     utils = require('../../public/src/utils.js'),
 
-    // some useful modules
+// some useful modules
 
-    // mysql to talk to ubb db
+// mysql to talk to ubb db
     mysql = require("mysql"),
 
-    // exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
-    // todo: too fucking slow ! and a memory hog !!
+// exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
+// todo: too fucking slow ! and a memory hog !!
     htmlToMarkdown = require("html-md"),
 
-    // I'm lazy
+// I'm lazy
     $ = require("jquery"),
     async = require("async"),
     fs = require("fs.extra"),
     http = require("http"),
 
-    // a quick logger
+// a quick logger
     Logger = require("./logger.js"),
-    // later to be initialized with config in init()
+// later to be initialized with config in init()
     logger,
 
     nbbData = {
@@ -113,37 +113,37 @@ module.exports = {
                 self.setupNbbGroups(next);
             },
             function (next) {
-                    logger.debug("ubbGetUsers()");
-                    self.ubbGetUsers(next);
+                logger.debug("ubbGetUsers()");
+                self.ubbGetUsers(next);
             },
             function (next) {
-                    logger.debug("ubbGetForums()");
-                    self.ubbGetForums(next);
+                logger.debug("ubbGetForums()");
+                self.ubbGetForums(next);
             },
             function (next) {
-                    logger.debug("ubbGetTopics()");
-                    self.ubbGetTopics(next);
+                logger.debug("ubbGetTopics()");
+                self.ubbGetTopics(next);
             },
             function (next) {
-                    logger.debug("ubbGetPosts()");
-                    self.ubbGetPosts(next);
+                logger.debug("ubbGetPosts()");
+                self.ubbGetPosts(next);
             },
             function(next) {
-                    logger.debug("nbbSaveUsers()");
-                    self.nbbSaveUsers(next);
+                logger.debug("nbbSaveUsers()");
+                self.nbbSaveUsers(next);
             },
             function(next) {
                 // ubb.forums ===> nbb.categories
-                    logger.debug("nbbSaveCategories()");
-                    self.nbbSaveCategories(next);
+                logger.debug("nbbSaveCategories()");
+                self.nbbSaveCategories(next);
             },
             function(next) {
-                    logger.debug("nbbSaveTopics()");
-                    self.nbbSaveTopics(next);
+                logger.debug("nbbSaveTopics()");
+                self.nbbSaveTopics(next);
             },
             function(next) {
-                    logger.debug("nbbSavePosts()");
-                    self.nbbSavePosts(next);
+                logger.debug("nbbSavePosts()");
+                self.nbbSavePosts(next);
             },
             function(next) {
                 self.restoreNbbConfigs(next);
@@ -294,7 +294,12 @@ module.exports = {
             users: {},
             forums: {},
             topics: {},
-            posts: {}
+            posts: {},
+
+            skippedUsers: [],
+            skippedForums: [],
+            skippedTopics: [],
+            skippedPosts: []
         };
 
         if (!this.config.ubbDbConfig) throw new Error("config.ubbDbConfig needs to be passed in to migrate()");
@@ -432,32 +437,6 @@ module.exports = {
             });
     },
 
-    _makeValidNbbUsername: function(_username, _userDisplayName, _ouid) {
-        var self = this
-            , validUsername = false
-            , username = _username ? self.cleanUsername(_username.toLowerCase()) : ""
-            , userslug = utils.slugify(username || "");
-
-        // if it's invalid by NodeBB's rules, i'll give the ubb.userDisplayName a try before I give up on that user account
-        if (!utils.isUserNameValid(username) || !userslug) {
-
-            logger.warn("[" + _ouid + "] " + "username: " + _username + " invalid... trying the user's display name...");
-            username = _userDisplayName ? self.cleanUsername(_userDisplayName) : "";
-            userslug = utils.slugify(username || "");
-
-            if (!utils.isUserNameValid(username) || !userslug) {
-                logger.warn("username: " + username + " still invalid, skipping ...");
-            } else {
-                validUsername = true;
-            }
-
-        } else {
-            validUsername = true;
-        }
-
-        return {username: username, userslug: userslug,  validUsername: validUsername, _username: _username, _userDisplayName: _userDisplayName};
-    },
-
     _ubbNormalizeUsers: function(users) {
         var self = this, kept = 0;
 
@@ -498,12 +477,14 @@ module.exports = {
                         logger.info("Prepared " + ui + " users so far.");
 
                 } else {
+                    self.ubbToNbbMap.skippedUsers.push(user);
+                    users.slice(ui, 1);
                     logger.warn("[!username] skipping user " + user._username + ":" + user._email + " _ouid: " + _ouid);
-                    delete users[_ouid];
                 }
             } else {
                 logger.warn("[!_username | !_joindate | !_email] skipping user " + user._username + ":" + user._email + " _ouid: " + _ouid);
-                delete users[_ouid];
+                self.ubbToNbbMap.skippedUsers.push(user);
+                users.slice(ui, 1);
             }
         });
         logger.info("Preparing users done. kept " + kept + "/" + users.length);
@@ -558,7 +539,8 @@ module.exports = {
 
             } else {
                 logger.warn("skipping forum " + forum._name + ":" + forum._description + " _ofid: " + _ofid);
-                delete forums[_ofid];
+                self.ubbToNbbMap.skippedForums.push(forum);
+                forums.slice(fi, 1);
             }
         });
 
@@ -571,30 +553,30 @@ module.exports = {
         var self = this, prefix = self.config.ubbTablePrefix;
         var query =
             "SELECT "
-            + prefix + "TOPICS.TOPIC_ID as _otid, "
-            + prefix + "TOPICS.FORUM_ID as _forumId, "
-            + prefix + "TOPICS.POST_ID as _postId, "
-            + prefix + "TOPICS.USER_ID as _userId, "
-            + prefix + "TOPICS.TOPIC_VIEWS as _views, "
-            + prefix + "TOPICS.TOPIC_SUBJECT as _title, "
-            + prefix + "TOPICS.TOPIC_REPLIES as _replies, "
-            + prefix + "TOPICS.TOPIC_TOTAL_RATES as _totalRates,"
-            + prefix + "TOPICS.TOPIC_RATING as _rating, "
-            + prefix + "TOPICS.TOPIC_CREATED_TIME as _datetime, "
-            + prefix + "TOPICS.TOPIC_IS_APPROVED as _approved, "
-            + prefix + "TOPICS.TOPIC_STATUS as _status, "
-            + prefix + "TOPICS.TOPIC_IS_STICKY as _pinned, "
+                + prefix + "TOPICS.TOPIC_ID as _otid, "
+                + prefix + "TOPICS.FORUM_ID as _forumId, "
+                + prefix + "TOPICS.POST_ID as _postId, "
+                + prefix + "TOPICS.USER_ID as _userId, "
+                + prefix + "TOPICS.TOPIC_VIEWS as _views, "
+                + prefix + "TOPICS.TOPIC_SUBJECT as _title, "
+                + prefix + "TOPICS.TOPIC_REPLIES as _replies, "
+                + prefix + "TOPICS.TOPIC_TOTAL_RATES as _totalRates,"
+                + prefix + "TOPICS.TOPIC_RATING as _rating, "
+                + prefix + "TOPICS.TOPIC_CREATED_TIME as _datetime, "
+                + prefix + "TOPICS.TOPIC_IS_APPROVED as _approved, "
+                + prefix + "TOPICS.TOPIC_STATUS as _status, "
+                + prefix + "TOPICS.TOPIC_IS_STICKY as _pinned, "
 
-            + prefix + "POSTS.POST_PARENT_ID as _postParent, "
-            + prefix + "POSTS.TOPIC_ID as _postTopicId, "
-            + prefix + "POSTS.POST_BODY as _firstPostBody "
+                + prefix + "POSTS.POST_PARENT_ID as _postParent, "
+                + prefix + "POSTS.TOPIC_ID as _postTopicId, "
+                + prefix + "POSTS.POST_BODY as _firstPostBody "
 
-            + "FROM " + prefix + "TOPICS, " + prefix + "POSTS "
-            + "WHERE " + prefix + "TOPICS.TOPIC_ID=" + prefix + "POSTS.TOPIC_ID "
-            + "AND " + prefix + "POSTS.POST_PARENT_ID=0 "
+                + "FROM " + prefix + "TOPICS, " + prefix + "POSTS "
+                + "WHERE " + prefix + "TOPICS.TOPIC_ID=" + prefix + "POSTS.TOPIC_ID "
+                + "AND " + prefix + "POSTS.POST_PARENT_ID=0 "
 
-            + (self.config.ubbqTestLimitToBeforeTimestampSeconds.topics ?
-            "AND " + prefix + "TOPICS.TOPIC_CREATED_TIME < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.topics : "");
+                + (self.config.ubbqTestLimitToBeforeTimestampSeconds.topics ?
+                "AND " + prefix + "TOPICS.TOPIC_CREATED_TIME < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.topics : "");
 
         this.ubbq(query,
             function(err, rows){
@@ -645,7 +627,8 @@ module.exports = {
                 var requiredKeys = ["topic._forumId","user"];
                 var falsyIndex = self.whichIsFalsy(requiredValues);
                 logger.warn("Skipping topic: " + topic._otid + " titled: " + topic._title + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
-                delete topics[_otid];
+                self.ubbToNbbMap.skippedTopics.push(topic);
+                topics.slice(ti, 1);
             }
         });
 
@@ -713,7 +696,8 @@ module.exports = {
                 var requiredKeys = ["post._parent", "topic", "user"];
                 var falsyIndex = self.whichIsFalsy(requiredValues);
                 logger.warn("Skipping post: " + post._opid + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
-                delete posts[_opid];
+                self.ubbToNbbMap.skippedPosts.push(post);
+                posts.slice(pi, 1);
             }
         });
         logger.info("Preparing posts done. kept " + kept + "/" + posts.length);
@@ -730,8 +714,10 @@ module.exports = {
         async.eachSeries(_users, function(key, save) {
             var user = users[key];
 
-            // if that's the admin, skip
-            if (user.uid == 1) {
+            // if that's the admin '**DONOTDELETE**' UBB User, skip
+            if (user._ouid == 1 || !user.username) {
+                self.ubbToNbbMap.skippedUsers.push(user);
+                logger.warn("username: '" + (user.username || user._username) + "' is invalid.");
                 save();
                 return;
             }
@@ -739,7 +725,8 @@ module.exports = {
             logger.debug("[idx: " + key + "] saving user: " + user.username);
             User.create(user.username, user.password, user.email, function(err, uid) {
                 if (err) {
-                    logger.error(" username: " + user.username + " -- " + err);
+                    logger.error(" username: '" + user.username + "' " + err + " .. skipping");
+                    self.ubbToNbbMap.skippedUsers.push(user);
                 } else {
 
                     var reputation = 0;
@@ -807,13 +794,13 @@ module.exports = {
     // save the UBB categories to nbb's redis
     // ubb.forums == nbb.categories
     nbbSaveCategories: function(next) {
-        var self = this;
+        var self = this, count = 0;
         var categories = self.ubbToNbbMap.forums;
         var _categories = Object.keys(categories);
 
         async.eachSeries(_categories, function(key, save) {
             var category = categories[key];
-            logger.debug("[idx:" + key + "] saving category: " + category.name);
+            logger.debug("[idx:" + count++ + "] saving category: " + category.name);
 
             Categories.create(category, function(err, categoryData) {
 
@@ -836,7 +823,7 @@ module.exports = {
     // save the UBB topics to nbb's redis
     nbbSaveTopics: function(next) {
         // topics chez nbb are forums chez ubb
-        var self = this;
+        var self = this, count = 0;
 
         var topics = self.ubbToNbbMap.topics;
         var _topics = Object.keys(topics);
@@ -846,7 +833,7 @@ module.exports = {
                 topic.cid = self.ubbToNbbMap.forums[topic._forumId].cid;
                 topic.uid = self.ubbToNbbMap.users[topic._userId].uid;
 
-                logger.debug("[idx:" + key + "] saving topic: " + topic.title);
+                logger.debug("[idx:" + count++ + "] saving topic: " + topic.title);
                 Topics.post(topic.uid, topic.title, topic.content, topic.cid, function(err, ret){
                     if (err) {
                         logger.error(err);
@@ -902,7 +889,7 @@ module.exports = {
                 });
             },
             function(){
-                self.exit(0, "All Done.");
+                next();
             });
     },
 
@@ -1056,5 +1043,47 @@ module.exports = {
 
     hazHtml: function(str){
         return !!str.match(/<[a-z][\s\S]*>/i);
+    },
+
+    // todo: holy fuck clean this shit
+    _makeValidNbbUsername: function(_username, _userDisplayName) {
+        var self = this
+            , _userslug = utils.slugify(_username || "");
+
+        if (utils.isUserNameValid(_username) && _userslug) {
+            return {username: _username, userslug: _userslug, validUsername: true, _username: _username, _userDisplayName: _userDisplayName};
+
+        } else {
+
+            logger.warn(_username + " [_username] is invalid, attempting to clean.");
+            var username = self.cleanUsername(_username);
+            var userslug = utils.slugify(username);
+
+            if (utils.isUserNameValid(username) && userslug) {
+                return {username: username, userslug: userslug, validUsername: true, _username: _username, _userDisplayName: _userDisplayName};
+
+            } else {
+
+                logger.warn(username + " [username.cleaned] is still invalid, attempting to use the userDisplayName.");
+                var _userDisplaySlug = utils.slugify(_userDisplayName);
+
+                if (utils.isUserNameValid(_userDisplayName) && _userDisplaySlug) {
+                    return {username: _userDisplayName, userslug: _userDisplaySlug, validUsername: true, _username: _username, _userDisplayName: _userDisplayName};
+
+                } else {
+
+                    logger.warn(_userDisplayName + " [_userDisplayName] is invalid, attempting to clean.");
+                    var userDisplayName = self.cleanUsername(_userDisplayName);
+                    var userDisplaySlug = utils.slugify(userDisplayName);
+
+                    if (utils.isUserNameValid(userDisplayName) && userDisplaySlug) {
+                        return {username: userDisplayName, userslug: userDisplaySlug, validUsername: true, _username: _username, _userDisplayName: _userDisplayName};
+                    } else {
+                        logger.warn(userDisplayName + " [_userDisplayName.cleaned] is still invalid. sorry. no luck");
+                        return {username: userDisplayName, userslug: userDisplaySlug, validUsername: false, _username: _username, _userDisplayName: _userDisplayName};
+                    }
+                }
+            }
+        }
     }
 };
