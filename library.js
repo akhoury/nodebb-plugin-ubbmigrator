@@ -512,7 +512,7 @@ module.exports = {
 
                     // nbb forces signatures to be less than 150 chars
                     user.signature = self.truncateStr(user._signature || "", 150);
-                    user.signatureMd = self.hazHtml(user.signature) ? htmlToMarkdown(user.signature) : user.signature;
+                    // user.signatureMd = self.hazHtml(user.signature) ? htmlToMarkdown(user.signature) : user.signature;
 
                     // from unix timestamp (s) to JS timestamp (ms)
                     user._joindate = user._joindate * 1000;
@@ -682,7 +682,9 @@ module.exports = {
                 // from s to ms
                 var time = topic._datetime * 1000;
 
-                topic.content = self.hazHtml(topic._firstPostBody || "") ? htmlToMarkdown(topic._firstPostBody || "") : topic._firstPostBody || "";
+               // topic.content = self.hazHtml(topic._firstPostBody || "") ? htmlToMarkdown(topic._firstPostBody || "") : topic._firstPostBody || "";
+                topic.content = topic._firstPostBody || "";
+
                 topic.title = topic._title ? topic._title[0].toUpperCase() + topic._title.substr(1) : "Untitled";
                 topic.timestamp = time;
                 topic.relativeTime = new Date(time).toISOString();
@@ -749,11 +751,12 @@ module.exports = {
 
             var user = self.ubbToNbbMap.users[post._userId];
 
-            if (post._parent && topic && user && post._body) {
+            if (post._parent && topic && user) {
                 // from s to ms
                 var time = post._datetime * 1000;
 
                 post.content = self.hazHtml(post._body) ? htmlToMarkdown(post._body) : post._body;
+                post.content = post._body || "";
                 post.timestamp = time;
                 post.relativeTime = new Date(time).toISOString();
 
@@ -763,8 +766,8 @@ module.exports = {
                 if (pi % 1000 == 0)
                     logger.info("filetered " + pi + " posts so far.");
             } else {
-                var requiredValues = [post._parent, topic, user, post._body];
-                var requiredKeys = ["post._parent", "topic", "user", "post_.body"];
+                var requiredValues = [post._parent, topic, user];
+                var requiredKeys = ["post._parent", "topic", "user"];
                 var falsyIndex = self.whichIsFalsy(requiredValues);
                 logger.warn("Skipping post: " + post._opid + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
                 delete posts[_opid];
@@ -913,10 +916,10 @@ module.exports = {
                         Topics.setTopicField(ret.topicData.tid, "pinned", topic.pinned);
                         Posts.setPostField(ret.postData.pid, "timestamp", topic.timestamp, function (){
                             Posts.setPostField(ret.postData.pid, "relativeTime", topic.relativeTime, function (){
-                                self.ubbToNbbMap.topics[topic._otid] = {tid: ret.topicData.tid, redirectRule: redirectRule};
                                 save();
                             });
                         });
+                        self.ubbToNbbMap.topics[topic._otid] = {tid: ret.topicData.tid, redirectRule: redirectRule};
                     }
                 });
             },
