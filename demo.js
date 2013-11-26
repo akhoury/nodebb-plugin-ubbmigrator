@@ -23,6 +23,7 @@ ubb.migrate({
             "admin:password": "password",
             "admin:password:confirm": "password",
             "admin:email": "you@example.com",
+
             // i'll let nodebb decide the defaults here
             "redis:host": "",
             "redis:port": null,
@@ -33,23 +34,6 @@ ubb.migrate({
         }
     },
 
-    // these NEED to start with ./whatever.json NOT whatever.json since I'm using require() to load them. I know, don't judge me pls.
-    ubbTmpFiles: {
-        users: "../tmp/ubb/users.json",
-        categories: "../tmp/ubb/categories.json",
-        forums: "../tmp/ubb/forums.json",
-        topics: "../tmp/ubb/topics.json",
-        posts: "../tmp/ubb/posts.json"
-    },
-    nbbTmpFiles: {
-        users: "../tmp/nbb/users.json",
-        // forums become categories in NBB, and I loose UBB categories
-        categories: "../tmp/nbb/categories.json",
-        topics: "../tmp/nbb/topics.json",
-        posts: "../tmp/nbb/posts.json"
-    },
-    ubbToNbbMapFile: "../tmp/ubbToNbbMap.json",
-
     // optional, that's the default
     ubbTablePrefix: "ubbt_",
 
@@ -57,12 +41,8 @@ ubb.migrate({
     // hard timestamp in seconds limit on some stuff since they're huge
     ubbqTestLimitToBeforeTimestampSeconds: {
         // before 2004 sometime
-        users: 1049942244, // null, //1081478244,
-        topics: 1049942244, // null, //1049942244,
-        posts: 1049942244 // null //1049942244
-    },
-
-    // don't put anything to nbb db
-    dontSaveToNbb: false,
-    dontGetFromUbb: false
+        users: 1081478244, //1049942244, // null, //1081478244,
+        topics: 1081478244, // null, //1049942244,
+        posts: 1081478244 // null //1049942244
+    }
 });

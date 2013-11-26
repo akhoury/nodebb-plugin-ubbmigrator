@@ -21,7 +21,7 @@
 
 var Group, Meta, User, Topics, Posts, Categories, RDB;
 
-// todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's not
+// todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's not working for some reason
 try {
     Group = module.parent.require('./groups.js');
     Meta = module.parent.require('./meta.js');
@@ -44,33 +44,26 @@ try {
 
 var
 
-// nbb Objects, required, these paths assume that the plugin lives in /NodeBB/node_modules/nodebb-plugin-ubbmigrator
-// todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's working for some reason
-//    User = module.parent.require('./user.js'),
-//    Topics = module.parent.require('./topics.js'),
-//    Posts = module.parent.require('./posts.js'),
-//    Categories = module.parent.require('./categories.js'),
-
-// nbb utils, very useful
+    // nbb utils, very useful
     utils = require('../../public/src/utils.js'),
 
-// some useful modules
+    // some useful modules
 
-// mysql to talk to ubb db
+    // mysql to talk to ubb db
     mysql = require("mysql"),
 
-// exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
+    // exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
     htmlToMarkdown = require("html-md"),
 
-// I'm lazy
+    // I'm lazy
     $ = require("jquery"),
     async = require("async"),
     fs = require("fs.extra"),
     http = require("http"),
 
-// my quick logger
+    // my quick logger
     Logger = require("./logger.js"),
-//later to be initialized with config in init()
+    // later to be initialized with config in init()
     logger,
 
     nbbData = {
@@ -120,15 +113,6 @@ module.exports = {
                 } else{
                     logger.debug("ubbGetUsers()");
                     self.ubbGetUsers(next);
-                }
-            },
-            function (next) {
-                if (self.config.dontGetFromUbb) {
-                    logger.debug("Skipping ubbGetCategories()");
-                    next();
-                } else{
-                    logger.debug("ubbGetCategories()");
-                    self.ubbGetCategories(next);
                 }
             },
             function (next) {
@@ -325,7 +309,8 @@ module.exports = {
                 logger.info("\n\nNodeBB re-setup completed.");
                 next();
             } else {
-                throw new Error("NodeBB automated setup didn't go well.");
+                logger.error(result);
+                throw new Error("NodeBB automated setup didn't too well. ");
             }
         };
 
@@ -347,20 +332,10 @@ module.exports = {
         // and creating ReWriteRules
         this.ubbToNbbMap = {
             users: {},
-            categories: {},
+            forums: {},
             topics: {},
             posts: {},
             skippedUsers: {}
-        };
-
-        // in memory ubbData lists
-        this.ubbData = {
-            users: [],
-            usersProfiles: [],
-            categories: [],
-            forums: [],
-            topics: [],
-            posts: []
         };
 
         if (!this.config.ubbDbConfig) throw new Error("config.ubbDbConfig needs to be passed in to migrate()");
@@ -382,7 +357,6 @@ module.exports = {
 
         next();
     },
-
 
     emptyNbbDefaultCategories: function(next){
 
@@ -444,7 +418,7 @@ module.exports = {
         // this will prevent User.sendConfirmationEmail from setting expiration time on the email address
         // per https://github.com/designcreateplay/NodeBB/blob/master/src/user.js#L458
         if (this.config.nbbAutoConfirmEmails)
-            nbbTempConfigs['email:smtp:host'] = "this.host.is.set.by.ubbmigrator.todisable.email.confirmation";
+            nbbTempConfigs['email:smtp:host'] = "this.mail.host.is.set.by.ubbmigrator.todisable.email.confirmation.i.hope.this.wont.work";
 
         RDB.hmset("config", nbbTempConfigs, function(){
             next();
@@ -490,10 +464,9 @@ module.exports = {
                 + (self.config.ubbqTestLimitToBeforeTimestampSeconds.users ?
                 "AND " + prefix + "USERS.USER_REGISTERED_ON < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.users : ""),
 
-            function(err, rows){
-                self.ubbData.users = self._convertListToMap(rows, "_ouid");
-                self._ubbNormalizeUsers(self.ubbData.users);
-                self._ubbMarkdownUsersSignatures();
+            function(err, rows) {
+                if (err) throw err;
+                self.ubbToNbbMap.users = self._ubbNormalizeUsers(self._convertListToMap(rows, "_ouid"));
                 next();
             });
     },
@@ -525,10 +498,10 @@ module.exports = {
     },
 
     _ubbNormalizeUsers: function(users) {
-        var self = this, first = true;
+        var self = this, first = true, kept = 0;
         var arr = Object.keys(users);
 
-        fs.writeFileSync(self.config.ubbTmpFiles.users, "");
+        //fs.writeFileSync(self.config.ubbTmpFiles.users, "");
 
         arr.forEach(function(_ouid, ui){
             var user = users[_ouid];
@@ -539,9 +512,11 @@ module.exports = {
 
                     // nbb forces signatures to be less than 150 chars
                     user.signature = self.truncateStr(user._signature || "", 150);
+                    user.signatureMd = self.hazHtml(user.signature) ? htmlToMarkdown(user.signature) : user.signature;
 
                     // from unix timestamp (s) to JS timestamp (ms)
                     user._joindate = user._joindate * 1000;
+
 
                     // lower case the email as well
                     user.email = user._email.toLowerCase();
@@ -556,15 +531,15 @@ module.exports = {
                     // generate a temp password, don't worry i'll add the clear text to the map so you can email it to the user
                     user.password = self._genRandPwd(self.config.passwordGen.len, self.config.passwordGen.chars);
 
-                    //users[_ouid] = user;
-
-                    fs.appendFileSync(self.config.ubbTmpFiles.users, (first ? "[" : ",\n") + JSON.stringify(user, null, 4));
+                    kept++;
+                    users[_ouid] = user;
+                    //fs.appendFileSync(self.config.ubbTmpFiles.users, (first ? "[" : ",\n") + JSON.stringify(user, null, 4));
 
                     if (first)
                         first = false;
 
                     if (ui % 1000 == 0)
-                        logger.info(" saved " + ui + " users so far.");
+                        logger.info("filetered " + ui + " users so far.");
 
                 } else {
                     logger.warn("[!username] skipping user " + user._username + ":" + user._email + " _ouid: " + _ouid);
@@ -575,93 +550,164 @@ module.exports = {
                 delete users[_ouid];
             }
         });
-        fs.appendFileSync(self.config.ubbTmpFiles.users, "]");
-
-        logger.info("filtering " + arr.length + " users done");
+        //fs.appendFileSync(self.config.ubbTmpFiles.users, "]");
+        logger.info("filtering users done. kept " + kept + "/" + arr.length);
         return users;
-    },
-
-    _ubbMarkdownUsersSignatures: function() {
-        var self = this, first = true;
-        var users = require(self.config.ubbTmpFiles.users);
-        var arr = Object.keys(users);
-
-        // empty dat file
-        fs.writeFileSync(self.config.ubbTmpFiles.users, "");
-
-        arr.forEach(function(_ouid, ui){
-            var user = users[_ouid];
-            user.signatureMd = self.hazHtml(user.signature) ? htmlToMarkdown(user.signature) : user.signature;
-            fs.appendFileSync(self.config.ubbTmpFiles.users, (first ? "[" : ",\n") +  JSON.stringify(user, null, 4));
-
-            if (first)
-                first = false;
-
-            if (ui % 1000 == 0)
-                logger.info("'Markdowning' signatures processed " + ui + " users so far.");
-        });
-        fs.appendFileSync(self.config.ubbTmpFiles.users, "]");
-        logger.debug("Markdowning " + arr.length + " users done");
-        return users;
-    },
-
-    // get ubb categories
-    // I don't actually use these?
-    // since the ubb.forums become the nbb.categories
-    // if you want them .. use them.
-    ubbGetCategories: function(next) {
-        var self = this;
-        this.ubbq(
-            "SELECT CATEGORY_ID as _ocid, CATEGORY_TITLE as _name, CATEGORY_DESCRIPTION as _description "
-                + "FROM " + self.config.ubbTablePrefix + "CATEGORIES ",
-            function(err, rows){
-                logger.info("Categories query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
-                if (err) throw err;
-                self.ubbData.categories = self._convertListToMap(rows, "_ocid");
-
-                self.saveMap(self.config.ubbTmpFiles.categories, self.ubbData.categories, rows.length, "UBB Categories", next);
-
-            });
     },
 
     // get ubb forums
     ubbGetForums: function(next) {
-        var self = this;
+        var self = this, prefix = self.config.ubbTablePrefix;
         this.ubbq(
-            "SELECT FORUM_ID as _ofid, FORUM_TITLE as _name, FORUM_DESCRIPTION as _description, "
-                + "CATEGORY_ID as _categoryId, FORUM_CREATED_ON as _datetime "
+            "SELECT "
+                + prefix + "FORUMS.FORUM_ID as _ofid, "
+                + prefix + "FORUMS.FORUM_TITLE as _name, "
+                + prefix + "FORUMS.FORUM_DESCRIPTION as _description, "
+                + prefix + "FORUMS.CATEGORY_ID as _categoryId, "
+                + prefix + "FORUMS.FORUM_CREATED_ON as _datetime "
                 + "FROM " + self.config.ubbTablePrefix + "FORUMS "
                 + (self.config.ubbqTestLimitToBeforeTimestampSeconds.forums ?
-                "WHERE FORUM_CREATED_ON < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.forums : ""),
+                "WHERE " + prefix + "FORUMS.FORUM_CREATED_ON < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.forums : ""),
 
             function(err, rows){
-                logger.info("Forums query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.forums = self._convertListToMap(rows, "_ofid");
-                self.saveMap(self.config.ubbTmpFiles.forums, self.ubbData.forums, rows.length, "UBB Forums", next);
+                logger.info("Forums query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
+                self.ubbToNbbMap.forums = self._ubbNormalizeForums(self._convertListToMap(rows, "_ofid"));
+                next();
             });
     },
 
+    // ubb.forums == nbb.categories
+    _ubbNormalizeForums: function(forums) {
+        var self = this, first = true, kept = 0;
+        var arr = Object.keys(forums);
+
+        //fs.writeFileSync(self.config.ubbTmpFiles.forums, "");
+
+        arr.forEach(function(_ofid, fi){
+            var forum = forums[_ofid];
+            if (forum._name && forum._description) {
+
+                // set some defaults since i don't have them
+                forum.icon = self.config.nbbCategoriesIcons[Math.floor(Math.random()*self.config.nbbCategoriesIcons.length)];
+                forum.blockclass = self.config.nbbCategoriesColorClasses[Math.floor(Math.random()*self.config.nbbCategoriesColorClasses.length)];
+
+                // order based on index i guess
+                forum.order = fi + 1;
+
+                forum.name = forum._name;
+                forum.description = forum._description;
+
+                kept++;
+                forums[_ofid] = forum;
+                //fs.appendFileSync(self.config.ubbTmpFiles.forums, (first ? "[" : ",\n") + JSON.stringify(forum, null, 4));
+
+                if (first)
+                    first = false;
+
+                if (fi % 1000 == 0)
+                    logger.info("filetered " + fi + " forums so far.");
+
+            } else {
+                logger.warn("skipping forum " + forum._name + ":" + forum._description + " _ofid: " + _ofid);
+                delete forums[_ofid];
+            }
+        });
+        //fs.appendFileSync(self.config.ubbTmpFiles.forums, "]");
+
+        logger.info("filtering forums done. kept " + kept + "/" + arr.length);
+        return forums;
+    },
+
+
     // get ubb topics
     ubbGetTopics: function(next) {
-        var self = this;
-        this.ubbq(
-            "SELECT TOPIC_ID as _otid, FORUM_ID as _forumId, POST_ID as _postId, "
-                + " USER_ID as _userId, TOPIC_VIEWS as _views, "
-                + " TOPIC_SUBJECT as _title, TOPIC_REPLIES as _replies, "
-                + " TOPIC_TOTAL_RATES as _totalRates, TOPIC_RATING as _rating, "
-                + " TOPIC_CREATED_TIME as _datetime, TOPIC_IS_APPROVED as _approved, "
-                + " TOPIC_STATUS as _status, TOPIC_IS_STICKY as _pinned "
-                + " FROM " + self.config.ubbTablePrefix + "TOPICS "
-                + (self.config.ubbqTestLimitToBeforeTimestampSeconds.topics ?
-                "WHERE TOPIC_CREATED_TIME < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.topics : ""),
+        // POST_PARENT_ID as _parent, POST_PARENT_USER_ID as _parentUserId, TOPIC_ID as _topicId
+        var self = this, prefix = self.config.ubbTablePrefix;
+        var query =             "SELECT "
+            + prefix + "TOPICS.TOPIC_ID as _otid, "
+            + prefix + "TOPICS.FORUM_ID as _forumId, "
+            + prefix + "TOPICS.POST_ID as _postId, "
+            + prefix + "TOPICS.USER_ID as _userId, "
+            + prefix + "TOPICS.TOPIC_VIEWS as _views, "
+            + prefix + "TOPICS.TOPIC_SUBJECT as _title, "
+            + prefix + "TOPICS.TOPIC_REPLIES as _replies, "
+            + prefix + "TOPICS.TOPIC_TOTAL_RATES as _totalRates,"
+            + prefix + "TOPICS.TOPIC_RATING as _rating, "
+            + prefix + "TOPICS.TOPIC_CREATED_TIME as _datetime, "
+            + prefix + "TOPICS.TOPIC_IS_APPROVED as _approved, "
+            + prefix + "TOPICS.TOPIC_STATUS as _status, "
+            + prefix + "TOPICS.TOPIC_IS_STICKY as _pinned, "
 
+            + prefix + "POSTS.POST_PARENT_ID as _postParent, "
+            + prefix + "POSTS.TOPIC_ID as _postTopicId, "
+            + prefix + "POSTS.POST_BODY as _firstPostBody "
+
+            + "FROM " + prefix + "TOPICS, " + prefix + "POSTS "
+            + "WHERE " + prefix + "TOPICS.TOPIC_ID=" + prefix + "POSTS.TOPIC_ID "
+            + "AND " + prefix + "POSTS.POST_PARENT_ID=0 "
+
+            + (self.config.ubbqTestLimitToBeforeTimestampSeconds.topics ?
+            "AND " + prefix + "TOPICS.TOPIC_CREATED_TIME < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.topics : "");
+
+        this.ubbq(query,
             function(err, rows){
-                logger.info("Topics query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.topics = self._convertListToMap(rows, "_otid");
+                logger.info("Topics query came back with " + rows.length + " records, now filtering, please be patient.");
+                self.ubbToNbbMap.topics = self._ubbNormalizeTopics(self._convertListToMap(rows, "_otid"));
                 next();
             });
+    },
+
+    // ubb.forums == nbb.categories
+    _ubbNormalizeTopics: function(topics) {
+        var self = this, first = true, kept = 0
+        , arr = Object.keys(topics);
+
+
+        //fs.writeFileSync(self.config.ubbTmpFiles.topics, "");
+        arr.forEach(function(_otid, ti){
+            var topic = topics[_otid];
+
+            // if that's the *DoNotDelete* use created by ubb, then let's assign that post to the initial user by nbb
+            if (!self.ubbToNbbMap.users[topic._userId] && topic._userId == 1) {
+                self.ubbToNbbMap.users[topic._userId] = {
+                    uid: 1
+                };
+            }
+            var user = self.ubbToNbbMap.users[topic._userId];
+
+            if (topic._forumId && user) {
+
+                // from s to ms
+                var time = topic._datetime * 1000;
+
+                topic.content = self.hazHtml(topic._firstPostBody || "") ? htmlToMarkdown(topic._firstPostBody || "") : topic._firstPostBody || "";
+                topic.title = topic._title ? topic._title[0].toUpperCase() + topic._title.substr(1) : "Untitled";
+                topic.timestamp = time;
+                topic.relativeTime = new Date(time).toISOString();
+                topic.viewcount = topic._views;
+                topic.pinned = topic._pinned;
+
+                kept++;
+                topics[topic._otid] = topic;
+                //fs.appendFileSync(self.config.ubbTmpFiles.topics, (first ? "[" : ",\n") + JSON.stringify(topic, null, 4));
+
+                if (first)
+                    first = false;
+                if (ti % 1000 == 0)
+                    logger.info("filtered " + ti + " topics so far.");
+            } else {
+                var requiredValues = [topic._forumId, user];
+                var requiredKeys = ["topic._forumId","user"];
+                var falsyIndex = self.whichIsFalsy(requiredValues);
+                logger.warn("Skipping topic: " + topic._otid + " titled: " + topic._title + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
+                delete topics[_otid];
+            }
+        });
+        //fs.appendFileSync(self.config.ubbTmpFiles.topics, "]");
+        logger.info("filtering topics done. kept " + kept + "/" + arr.length);
+        return topics;
     },
 
     // get ubb forums
@@ -673,48 +719,85 @@ module.exports = {
                 + "POST_BODY as _body, USER_ID as _userId, "
                 + "POST_MARKUP_TYPE as _markup, POST_IS_APPROVED as _approved "
                 + "FROM " + self.config.ubbTablePrefix + "POSTS "
-                + (self.config.ubbqTestLimitToBeforeTimestampSeconds.posts ?  "WHERE POST_POSTED_TIME < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.posts : ""),
+                + "WHERE POST_PARENT_ID > 0 "
+
+                + (self.config.ubbqTestLimitToBeforeTimestampSeconds.posts ?  "AND POST_POSTED_TIME < " + self.config.ubbqTestLimitToBeforeTimestampSeconds.posts : ""),
 
             function(err, rows){
-                console.log(err);
-
-                logger.info("Posts query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
                 if (err) throw err;
-                self.ubbData.posts = self._convertListToMap(rows, "_opid", function(item){
-                    if (item._parent == 0 && item._topicId && self.ubbData.topics[item._topicId]) {
-                        self.ubbData.topics[item._topicId]._firstPost = item;
-                    }
-                    return item;
-                });
-
-                self.saveMap(self.config.ubbTmpFiles.topics, self.ubbData.topics, "a large number of", "UBB Topics", function(){
-                    logger.info("hang on now writing posts to tmp dir... that could take a while.");
-                    self.saveMap(self.config.ubbTmpFiles.posts, self.ubbData.posts, rows.length, "UBB Posts", next);
-                });
+                logger.info("Posts query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
+                self.ubbToNbbMap.posts = self._ubbNormalizePosts(self._convertListToMap(rows, "_opid"));
+                next();
             });
     },
 
-// save the UBB users to nbb's redis
+    _ubbNormalizePosts: function(posts) {
+        var self = this, kept = 0;
+        var arr = Object.keys(posts);
+
+        //fs.writeFileSync(self.config.ubbTmpFiles.posts, "");
+        arr.forEach(function(_opid, pi){
+            var post = posts[_opid];
+            var topic = self.ubbToNbbMap.topics[post._topicId];
+
+            // if that's the *DoNotDelete* use created by ubb, then let's assign that post to the initial user by nbb
+            if (!self.ubbToNbbMap.users[post._userId] && post._userId == 1) {
+                self.ubbToNbbMap.users[post._userId] = {
+                    uid: 1
+                };
+            }
+
+            var user = self.ubbToNbbMap.users[post._userId];
+
+            if (post._parent && topic && user && post._body) {
+                // from s to ms
+                var time = post._datetime * 1000;
+
+                post.content = self.hazHtml(post._body) ? htmlToMarkdown(post._body) : post._body;
+                post.timestamp = time;
+                post.relativeTime = new Date(time).toISOString();
+
+                kept++;
+                self.ubbToNbbMap.posts[post._opid] = post;
+
+                if (pi % 1000 == 0)
+                    logger.info("filetered " + pi + " posts so far.");
+            } else {
+                var requiredValues = [post._parent, topic, user, post._body];
+                var requiredKeys = ["post._parent", "topic", "user", "post_.body"];
+                var falsyIndex = self.whichIsFalsy(requiredValues);
+                logger.warn("Skipping post: " + post._opid + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
+                delete posts[_opid];
+            }
+        });
+        logger.info("filtering posts done. kept " + kept + "/" + arr.length);
+        return posts;
+    },
+
+    // save the UBB users to nbb's redis
     nbbSaveUsers: function(next) {
         var self = this;
-        var users = require(this.config.ubbTmpFiles.users);
+
+        var users = self.ubbToNbbMap.users;
         var _users = Object.keys(users);
 
-
-        // iterate over each
         async.eachSeries(_users, function(key, save) {
-            // get the data from db
             var user = users[key];
+
+            // if that's the admin, skip
+            if (user.uid == 1) {
+                save();
+                return;
+            }
 
             logger.debug("[idx: " + key + "] saving user: " + user.username);
             User.create(user.username, user.password, user.email, function(err, uid) {
                 if (err) {
                     logger.error(" username: " + user.username + " -- " + err);
                 } else {
-                    // saving that for the map
-                    user.uid = uid;
 
                     var reputation = 0;
+
                     if (user._level == "Moderator") {
                         reputation = self.config.ubbToNbbModeratorsAddedReputation + user._rating;
                         Group.join(nbbData.groups.Moderators.gid, uid, function(){
@@ -750,11 +833,11 @@ module.exports = {
                         _u_.picture = user.avatar;
                         user.customPicture = true;
                     }
-                    user.redirectRule = self.redirectRule("users/" + user._ouid + "/" + user._username + "/", "user/" + user.userslug);
-                    user = $.extend({}, user, _u_);
-                    self.ubbToNbbMap.users[user._ouid] = user;
-                    User.setUserFields(uid, _u_);
 
+                    var redirectRule = self.redirectRule("users/" + user._ouid + "/" + user._username + "/", "user/" + user.userslug);
+
+                    self.ubbToNbbMap.users[user._ouid] = {uid: uid, redirectRule: redirectRule, avatar: user.avatar, customPicture: user.customPicture};
+                    User.setUserFields(uid, _u_);
                     if (self.config.nbbAutoConfirmEmails)
                         RDB.set('email:' + user.email + ':confirm', true);
                 }
@@ -762,16 +845,124 @@ module.exports = {
             });
         }, function(){
 
-            if (self.config.nbbAutoConfirmEmails)
+            if (self.config.nbbAutoConfirmEmails) {
                 RDB.keys("confirm:*:email", function(err, keys){
                     keys.forEach(function(key){
                         RDB.del(key);
                     });
+                    next();
                 });
-            self.saveMap(self.config.nbbTmpFiles.users, self.ubbToNbbMap.users, _users.length, "NBB Users", next, "_ouid");
+            } else {
+                next();
+            }
         });
     },
 
+    // save the UBB categories to nbb's redis
+    // ubb.forums == nbb.categories
+    nbbSaveCategories: function(next) {
+        var self = this;
+        var categories = self.ubbToNbbMap.forums;
+        var _categories = Object.keys(categories);
+
+        async.eachSeries(_categories, function(key, save) {
+            var category = categories[key];
+            logger.debug("[idx:" + key + "] saving category: " + category.name);
+
+            Categories.create(category, function(err, categoryData) {
+
+                if (err) {
+                    logger.error(err);
+                    save();
+                } else {
+                    var redirectRule = self.redirectRule("forums/" + category._ofid + "/", "category/" + categoryData.slug);
+
+                    self.ubbToNbbMap.forums[category._ofid] = {cid: categoryData.cid, redirectRule: redirectRule};
+                }
+
+                save();
+            });
+        }, function(){
+            next();
+        });
+    },
+
+    // save the UBB topics to nbb's redis
+    nbbSaveTopics: function(next) {
+        // topics chez nbb are forums chez ubb
+        var self = this;
+
+        var topics = self.ubbToNbbMap.topics;
+        var _topics = Object.keys(topics);
+        async.eachSeries(_topics, function(key, save) {
+
+                var topic = topics[key];
+                topic.cid = self.ubbToNbbMap.forums[topic._forumId].cid;
+                topic.uid = self.ubbToNbbMap.users[topic._userId].uid;
+
+                logger.debug("[idx:" + key + "] saving topic: " + topic.title);
+                Topics.post(topic.uid, topic.title, topic.content, topic.cid, function(err, ret){
+                    if (err) {
+                        logger.error(err);
+                        save();
+                    } else {
+                        var redirectRule = self.redirectRule("topics/" + topic._otid + "/", "topic/" + ret.topicData.slug);
+
+                        Topics.setTopicField(ret.topicData.tid, "timestamp", topic.timestamp);
+                        Topics.setTopicField(ret.topicData.tid, "viewcount", topic.viewcount);
+                        Topics.setTopicField(ret.topicData.tid, "pinned", topic.pinned);
+                        Posts.setPostField(ret.postData.pid, "timestamp", topic.timestamp, function (){
+                            Posts.setPostField(ret.postData.pid, "relativeTime", topic.relativeTime, function (){
+                                self.ubbToNbbMap.topics[topic._otid] = {tid: ret.topicData.tid, redirectRule: redirectRule};
+                                save();
+                            });
+                        });
+                    }
+                });
+            },
+            function (){
+                next();
+            }
+        );
+    },
+
+    // save the UBB posts to nbb's redis
+    nbbSavePosts: function(next) {
+        var self = this;
+        var posts = self.ubbToNbbMap.posts;
+        var _posts = Object.keys(posts);
+
+        async.eachSeries(_posts, function(key, save) {
+                var post = posts[key];
+                post.tid = self.ubbToNbbMap.topics[post._topicId].tid;
+                post.uid = self.ubbToNbbMap.users[post._userId].uid;
+
+                logger.debug("[idx: " + key + "] saving post: " + post._opid);
+                Posts.create(post.uid, post.tid, post.content, function(err, postData){
+
+                    if (err) {
+                        logger.error(err);
+                        save();
+                    } else {
+                        var redirectRule = self.redirectRule("topics/" + post._topicId + "/(.)*#Post" + post._opid, "topic/" + post.tid + "#" + postData.pid);
+
+                        Posts.setPostField(postData.pid, "timestamp", post.timestamp, function (){
+                            Posts.setPostField(postData.pid, "relativeTime", post.relativeTime, function (){
+                                self.ubbToNbbMap.posts[post._opid] = {pid: postData.pid, redirectRule: redirectRule};
+                                save();
+                            });
+                        });
+                    }
+                });
+            },
+            function(){
+                self.exit(0, "All Done.");
+            });
+    },
+
+    // helpers
+
+    // remove this
     saveMap: function(file, map, length, wat, next, key) {
         if (typeof map == "array" && key)
             map = this._convertListToMap(map, key);
@@ -793,210 +984,23 @@ module.exports = {
         return res;
     },
 
-// save the UBB categories to nbb's redis
-// ubb.forums == nbb.categories
-    nbbSaveCategories: function(next){
-        var categories = require(this.config.ubbTmpFiles.forums);
-        var self = this;
-        var _categories = Object.keys(categories);
-        var _order = 0;
-
-        // iterate over each
-        async.eachSeries(_categories, function(key, save) {
-            // get the data from db
-            var category = categories[key];
-
-            // set some defaults since i don't have them
-            category.icon = self.config.nbbCategoriesIcons[Math.floor(Math.random()*self.config.nbbCategoriesIcons.length)];
-            category.blockclass = self.config.nbbCategoriesColorClasses[Math.floor(Math.random()*self.config.nbbCategoriesColorClasses.length)];
-
-            // order based on index i guess
-            category.order = _order++ + 1;
-
-            category.name = category._name;
-            category.description = category._description;
-
-            logger.debug("[idx:" + key + "] saving category: " + category.name);
-            Categories.create(category, function(err, categoryData) {
-                if (err) {
-                    logger.error(err);
-                } else {
-                    categoryData.redirectRule = self.redirectRule("forums/" + category._ofid + "/", "category/" + categoryData.slug);
-
-                    category = $.extend({}, category, categoryData);
-
-                    // save a reference from the old category to the new one
-                    self.ubbToNbbMap.categories[category._ofid] = category;
-                }
-                save();
-            })
-        }, function(){
-            self.saveMap(self.config.nbbTmpFiles.categories, self.ubbToNbbMap.categories, _categories.length, "NBB Categories", next, "_ofid");
-        });
-    },
-
-// save the UBB topics to nbb's redis
-    nbbSaveTopics: function(next){
-        // topics chez nbb are forums chez ubb
-        var topics = require(this.config.ubbTmpFiles.topics);
-        var users = require(this.config.nbbTmpFiles.users);
-        var categories = require(this.config.nbbTmpFiles.categories);
-
-        // var posts = require(this.config.ubbTmpFiles.posts);
-
-        var self = this;
-        var _topics = Object.keys(topics);
-
-        async.eachSeries(_topics, function(key, save) {
-                // get the data from db
-                var topic = topics[key];
-
-                // if that's the *DoNotDelete* use created by ubb, then let's assign that post to the initial user by nbb
-                if (!users[topic._userId] && topic._userId == 1) {
-                    users[topic._userId] = {
-                        uid: 1
-                    };
-                }
-
-                if (!topic._firstPost || !topic._forumId || !topic._userId || !users[topic._userId] || !categories[topic._forumId] || !topic._firstPost._body) {
-                    var requiredValues = [topic._firstPost, topic._forumId, topic._userId, users[topic._userId], categories[topic._forumId], (topic._firstPost || {})._body];
-                    var requiredKeys = ["topic._firstPost", "topic._forumId", "topic._userId", "users[topic._userId]", "categories[topic._forumId]", "topic._firstPost._body"];
-                    var falsyIndex = self.whichIsFalsy(requiredValues);
-                    logger.warn("Skipping topic: " + topic._otid + " titled: " + topic._title + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
-                    save();
-                } else {
-
-                    // from s to ms
-                    var time = topic._datetime * 1000;
-
-                    var _t_ = {
-                        categoryId: categories[topic._forumId].cid,
-                        uid: users[topic._userId].uid,
-                        content: self.hazHtml(topic._firstPost._body || "") ? htmlToMarkdown(topic._firstPost._body || "") : topic._firstPost._body || "",
-                        title: topic._title ? topic._title[0].toUpperCase() + topic._title.substr(1) : "Untitled",
-                        timestamp: time,
-                        relativeTime: new Date(time).toISOString(),
-                        viewcount: topic._views,
-                        pinned: topic._pinned
-                    };
-
-                    logger.debug("[idx:" + key + "] saving topic: " + _t_.title);
-                    Topics.post(_t_.uid, _t_.title, _t_.content, _t_.categoryId, function(err, ret){
-                        if (err) {
-                            logger.error(err);
-                            save();
-                        } else {
-                            ret.topicData.redirectRule = self.redirectRule("topics/" + topic._otid + "/", "topic/" + ret.topicData.slug);
-                            ret.topicData = $.extend({}, ret.topicData, _t_);
-
-                            Topics.setTopicField(ret.topicData.tid, "timestamp", _t_.timestamp);
-                            Topics.setTopicField(ret.topicData.tid, "viewcount", _t_.viewcount);
-                            Topics.setTopicField(ret.topicData.tid, "pinned", _t_.pinned);
-
-                            Posts.setPostField(ret.postData.pid, "timestamp", _t_.timestamp, function (){
-                                Posts.setPostField(ret.postData.pid, "relativeTime", _t_.relativeTime, function (){
-                                    // save a reference from the old category to the new one
-                                    self.ubbToNbbMap.topics[topic._otid] = ret.topicData;
-                                    save();
-                                });
-                            });
-                        }
-                    });
-                }
-            },
-            function (){
-                self.saveMap(self.config.nbbTmpFiles.topics, self.ubbToNbbMap.topics, _topics.length, "NBB Topics", next, "_otid");
-            }
-        );
-    },
-
-// save the UBB posts to nbb's redis
-    nbbSavePosts: function(next){
-        var posts = require(this.config.ubbTmpFiles.posts);
-
-        var self = this;
-        var _posts = Object.keys(posts);
-
-        // iterate over each
-        async.eachSeries(_posts, function(key, save) {
-                // get the data from db
-                var post = posts[key];
-
-                // if that's the *DoNotDelete* use created by ubb, then let's assign that post to the initial user by nbb
-                if (!self.ubbToNbbMap.users[post._userId] && post._userId == 1) {
-                    self.ubbToNbbMap.users[post._userId] = {
-                        uid: 1
-                    };
-                }
-
-                var topic = self.ubbToNbbMap.topics[post._topicId];
-                var user = self.ubbToNbbMap.users[post._userId];
-
-                // if this is a topic post, used for the topic's content
-                if (!post._parent || !topic || !user || !post._body) {
-                    var requiredValues = [post._parent, topic, user, post._body];
-                    var requiredKeys = ["post._parent", "topic", "user", "post_.body"];
-                    var falsyIndex = self.whichIsFalsy(requiredValues);
-                    logger.warn("Skipping post: " + post._opid + " because " + requiredKeys[falsyIndex] + " is falsy. Value: " + requiredValues[falsyIndex]);
-                    save();
-                } else {
-
-                    // from s to ms
-                    var time = post._datetime * 1000;
-
-                    var _p_ = {
-                        tid: self.ubbToNbbMap.topics[post._topicId].tid,
-                        uid: self.ubbToNbbMap.users[post._userId].uid,
-                        content: self.hazHtml(post._body) ? htmlToMarkdown(post._body) : post._body,
-                        timestamp: time,
-                        relativeTime: new Date(time).toISOString()
-                    };
-
-                    logger.debug("[idx:" + key + "] saving post: " + post._opid);
-                    Posts.create(_p_.uid, _p_.tid, _p_.content, function(err, postData){
-                        if (err) {
-                            logger.error(err);
-                        } else {
-
-                            postData.redirectRule = self.redirectRule("topics/" + post._topicId + "/(.)*#Post" + post._opid, "topic/" + _p_.tid + "#" + postData.pid);
-
-                            postData = $.extend({}, post, postData);
-
-                            Posts.setPostField(postData.pid, "timestamp", _p_.timestamp, function (){
-                                Posts.setPostField(postData.pid, "relativeTime", _p_.relativeTime, function (){
-
-                                    // save a reference from the old category to the new one
-                                    self.ubbToNbbMap.posts[post._opid] = postData;
-                                });
-                            });
-                        }
-                        save();
-                    });
-                }
-            },
-            function(){
-                self.saveMap(self.config.nbbTmpFiles.posts, self.ubbToNbbMap.posts, _posts.length, "NBB Posts", next);
-            });
-    },
-
-// helpers
-
-    exit: function(code){
-        logger.info("Exiting ... ");
+    exit: function(code, msg){
+        logger.info("Exiting ... code: " + code +  " -- " + msg);
         this.ubbDisconnect();
         process.exit(this.isNumber(code) ? code : 0);
     },
 
-// disconnect from the ubb mysql database
+    // disconnect from the ubb mysql database
     ubbDisconnect: function(){
         this.ubbConnection.end();
     },
 
-// query ubb mysql database
+    // query ubb mysql database
     ubbq: function(q, callback){
         this.ubbConnection.query(q, callback);
     },
 
+    // which of the values is falsy
     whichIsFalsy: function(arr){
         for (var i = 0; i < arr.length; i++) {
             if (!arr[i])
@@ -1005,7 +1009,7 @@ module.exports = {
         return null;
     },
 
-// writing json to file slowly, prop by prop to avoid Out of memory errors
+    // writing json to file slowly, prop by prop to avoid Out of memory errors
     slowWriteJSONtoFile: function(file, json, callback) {
         fs.writeFileSync(file, "{");
         var first = true;
@@ -1024,12 +1028,12 @@ module.exports = {
         callback(null);
     },
 
-// writing json to file prop by prop to avoid Out of memory errors
+    // writing json to file prop by prop to avoid Out of memory errors
     writeJSONtoFile: function(file, json, callback) {
         fs.writeFile(file, JSON.stringify(json, null, 4), callback);
     },
 
-// yea, for faster lookup
+    // yea, for faster lookup
     _convertListToMap: function(list, key, fn){
         var map = {};
         var f = typeof fn == "function";
@@ -1043,7 +1047,7 @@ module.exports = {
         return map;
     },
 
-// check if valid url
+    // check if valid url
     _isValidUrl: function(url){
         var pattern = /^(?!mailto:)(?:(?:https?|ftp):\/\/)?(?:\S+(?::\S*)?@)?(?:(?:(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,})))|localhost)(?::\d{2,5})?(?:\/[^\s]*)?$/i;
 
@@ -1053,13 +1057,13 @@ module.exports = {
         return true;
     },
 
-// check if valid url
+    // check if valid url
     _isValidUrlSimple: function(url){
         // no ftp allowed and length must be > 10 .. whatever.
         return url && url.indexOf("http") == 0 && url.length > 10 && url.length <= 2083;
     },
 
-// a helper method to generate temporary passwords
+    // a helper method to generate temporary passwords
     _genRandPwd: function(len, chars) {
         var index = (Math.random() * (chars.length - 1)).toFixed(0);
         return len > 0 ? chars[index] + this._genRandPwd(len - 1, chars) : '';
@@ -1097,7 +1101,7 @@ module.exports = {
             6: "Jul", 7: "Aug", 8: "Sep", 9: "Oct", 10: "Nov", 11: "Dec" }})()[i];
     },
 
-// todo: i think I got that right?
+    // todo: i think I got that right?
     cleanUsername: function(str) {
         str = str.replace(/[^\u00BF-\u1FFF\u2C00-\uD7FF\-.*\w\s]/gi, '');
         // todo: i don't know what I'm doing HALP
