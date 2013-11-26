@@ -88,6 +88,11 @@ module.exports = {
             function(next){
                 self.init(config, next);
             },
+            function(next) {
+                if (self.config.nbbReSetup && self.config.nbbReSetup.run) {
+                    self.nbbReSetup(next);
+                }
+            },
             function(next){
                 logger.debug("setup()");
                 self.initialSetup(next);
@@ -130,7 +135,7 @@ module.exports = {
                 if (self.config.dontGetFromUbb) {
                     logger.debug("Skipping ubbGetForums()");
                     next();
-                } else{
+                } else {
                     logger.debug("ubbGetForums()");
                     self.ubbGetForums(next);
                 }
@@ -209,6 +214,25 @@ module.exports = {
             ubbDbConfig: null,
             ubbTablePrefix: "ubbt_",
 
+            nbbReSetup: {
+                run: false,
+                flushdb: true,
+                config: {
+                    "admin:username": "admin",
+                    "admin:password": "password",
+                    "admin:password:confirm": "password",
+                    "admin:email": "you@example.com",
+
+                    // i'll let nodebb decide the defaults here
+                    "redis:host": "",
+                    "redis:port": null,
+                    "redis:password": "",
+                    "redis:database": "",
+                    "bind_address": "",
+                    "secret": ""
+                }
+            },
+
             // these NEED to start with ./whatever.json NOT whatever.json since I'm using require() to load them. I know, don't judge me pls.
             ubbTmpFiles: {
                 users: "./tmp/ubb/users.json",
@@ -270,6 +294,49 @@ module.exports = {
 
         if (typeof next == "function")
             next();
+    },
+
+    nbbReSetup: function(next){
+        var execSync = require("exec-sync")
+            , setupVal = JSON.stringify(this.config.nbbReSetup.config)
+            , node, result, command;
+
+        var setup = function(){
+            logger.debug("stating nodebb setup");
+            try {
+
+                // todo: won't work on windows
+                node = execSync("which node", true).stdout;
+                logger.debug("node lives here: " + node);
+
+                // assuming we're in nodebb/node_modules/nodebb-plugin-ubbmigrator
+                command = node + " ../../app.js --setup='" + setupVal + "'";
+                logger.info("Calling this command on your behalf: \n");
+                logger.info(command);
+                result = execSync(command, true);
+
+            } catch (e){
+                logger.error(e);
+                logger.info("COMMAND")
+                logger.info(result);
+                this.exit(1);
+            }
+            if (result.stdout.indexOf("NodeBB Setup Completed") > -1) {
+                logger.info("\n\nNodeBB re-setup completed.");
+                next();
+            } else {
+                throw new Error("NodeBB automated setup didn't go well.");
+            }
+        };
+
+        if (this.config.nbbReSetup.flushdb) {
+            RDB.flushdb(function(a, b){
+                logger.info("flushdb done. " + b );
+                setup();
+            });
+        } else {
+            setup();
+        }
     },
 
     initialSetup: function(next){
@@ -764,7 +831,7 @@ module.exports = {
                 save();
             })
         }, function(){
-                self.saveMap(self.config.nbbTmpFiles.categories, self.ubbToNbbMap.categories, _categories.length, "NBB Categories", next, "_ofid");
+            self.saveMap(self.config.nbbTmpFiles.categories, self.ubbToNbbMap.categories, _categories.length, "NBB Categories", next, "_ofid");
         });
     },
 

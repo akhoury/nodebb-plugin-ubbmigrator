@@ -5,10 +5,32 @@ ubb.migrate({
 
     // ubb db config
     ubbDbConfig: {
-        host: "127.0.0.1",
+        host: "localhost",
         user: "ubb_user",
         password: "password",
         database: "ubb_test"
+    },
+
+    // re-setup my nodebb installation, basically calling node app.js --setup={...} with the configs sepcified
+    nbbReSetup: {
+        run: true,
+        flushdb: true,
+
+        // these will be stringified into a string and passed to --setup
+        config: {
+            // these 4 are required to bypass the prompts
+            "admin:username": "admin",
+            "admin:password": "password",
+            "admin:password:confirm": "password",
+            "admin:email": "you@example.com",
+            // i'll let nodebb decide the defaults here
+            "redis:host": "",
+            "redis:port": null,
+            "redis:password": "",
+            "redis:database": "",
+            "bind_address": "",
+            "secret": ""
+        }
     },
 
     // these NEED to start with ./whatever.json NOT whatever.json since I'm using require() to load them. I know, don't judge me pls.
@@ -35,9 +57,9 @@ ubb.migrate({
     // hard timestamp in seconds limit on some stuff since they're huge
     ubbqTestLimitToBeforeTimestampSeconds: {
         // before 2004 sometime
-        users: 1104537600, // null, //1081478244,
-        topics: 1104537600, // null, //1049942244,
-        posts: 1104537600, // null //1049942244
+        users: 1049942244, // null, //1081478244,
+        topics: 1049942244, // null, //1049942244,
+        posts: 1049942244 // null //1049942244
     },
 
     // don't put anything to nbb db
