@@ -2,17 +2,22 @@
  if you're reading this source please not that "NodeBB" == "nbb" ==  "Nbb" == "NBB" as a terminology
  and ubb means the UBB Threads Forum Software, here's a link => http://www.ubbcentral.com/
 
- This Converter is written and tested for UBB 7.5.7 which was released sometime in 2013,
+ This Converter is written and tested for UBB 7.5.7 which was released sometime in 2013, that migrates to NodeBB 0.1.1
  */
 
+// todo !!!!! HITTING MEMORY LIMITS OVER 18k POSTS !!
 // todo maybe go through all users who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to my old forum avatar dir
-// todo nothing is really skippable at the moment, the nodebb db needs to be flushed, run node app.js --setup, then node app.js --upgrade
-// todo generate my nginx rewrite rules from the nbb map files
-// todo still, make sure the [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars
-// todo clear the default categories in nodebb/install so I would start with fresh categories.
+// todo go through all the html content and Markdown it
 
+// todo still, make sure the old [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars
+// todo generate my nginx rewrite rules from the logs
+
+// todo create a nodebb-theme that works with the site
+// todo create a nodebb-plugin that submits all the new user's emails to my mailchimp account
 // todo send emails to all users with temp passwords
+
 // todo if I have time, maybe implement a nbb plugin that enforces the 1 time use of temp passwords.
+// todo nothing is really skippable at the moment, the nodebb db needs to be flushed, run node app.js --setup, then node app.js --upgrade
 // todo TEST yo
 
 
@@ -44,7 +49,7 @@ try {
 
 var
 
-    // nbb utils, very useful
+    // nodebb utils, useful
     utils = require('../../public/src/utils.js'),
 
     // some useful modules
@@ -53,6 +58,7 @@ var
     mysql = require("mysql"),
 
     // exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
+    // todo: too fucking slow ! and a memory hog !!
     htmlToMarkdown = require("html-md"),
 
     // I'm lazy
@@ -61,7 +67,7 @@ var
     fs = require("fs.extra"),
     http = require("http"),
 
-    // my quick logger
+    // a quick logger
     Logger = require("./logger.js"),
     // later to be initialized with config in init()
     logger,
@@ -107,77 +113,37 @@ module.exports = {
                 self.setupNbbGroups(next);
             },
             function (next) {
-                if (self.config.dontGetFromUbb) {
-                    logger.debug("Skipping ubbGetUsers()");
-                    next();
-                } else{
                     logger.debug("ubbGetUsers()");
                     self.ubbGetUsers(next);
-                }
             },
             function (next) {
-                if (self.config.dontGetFromUbb) {
-                    logger.debug("Skipping ubbGetForums()");
-                    next();
-                } else {
                     logger.debug("ubbGetForums()");
                     self.ubbGetForums(next);
-                }
             },
             function (next) {
-                if (self.config.dontGetFromUbb) {
-                    logger.debug("Skipping ubbGetTopics()");
-                    next();
-                } else{
                     logger.debug("ubbGetTopics()");
                     self.ubbGetTopics(next);
-                }
             },
             function (next) {
-                if (self.config.dontGetFromUbb) {
-                    logger.debug("Skipping ubbGetPosts()");
-                    next();
-                } else{
                     logger.debug("ubbGetPosts()");
                     self.ubbGetPosts(next);
-                }
             },
             function(next) {
-                if (self.config.dontSaveToNbb) {
-                    logger.debug("Skipping nbbSaveUsers()");
-                    next();
-                } else {
                     logger.debug("nbbSaveUsers()");
                     self.nbbSaveUsers(next);
-                }
             },
             function(next) {
                 // ubb.forums ===> nbb.categories
-                if (self.config.dontSaveToNbb) {
-                    logger.debug("Skipping nbbSaveCategories()");
-                    next();
-                } else {
                     logger.debug("nbbSaveCategories()");
                     self.nbbSaveCategories(next);
-                }
             },
             function(next) {
-                if (self.config.dontSaveToNbb) {
-                    logger.debug("Skipping nbbSaveTopics()");
-                    next();
-                } else {
                     logger.debug("nbbSaveTopics()");
                     self.nbbSaveTopics(next);
-                }
             },
             function(next) {
-                if (self.config.dontSaveToNbb) {
-                    logger.debug("Skipping nbbSavePosts()");
-                    next();
-                } else {
                     logger.debug("nbbSavePosts()");
                     self.nbbSavePosts(next);
-                }
             },
             function(next) {
                 self.restoreNbbConfigs(next);
@@ -218,54 +184,46 @@ module.exports = {
             },
 
             // these NEED to start with ./whatever.json NOT whatever.json since I'm using require() to load them. I know, don't judge me pls.
-            ubbTmpFiles: {
-                users: "./tmp/ubb/users.json",
-                categories: "./tmp/ubb/categories.json",
-                forums: "./tmp/ubb/forums.json",
-                topics: "./tmp/ubb/topics.json",
-                posts: "./tmp/ubb/posts.json"
-            },
-            nbbTmpFiles: {
-                users: "./tmp/nbb/users.json",
-                // forums become categories in NBB, and I loose UBB categories
-                categories: "./tmp/nbb/categories.json",
-                topics: "./tmp/nbb/topics.json",
-                posts: "./tmp/nbb/posts.json"
-            },
             ubbToNbbMapFile: "./tmp/ubbToNbbMap.json",
 
+            // this is mainly for test, or if you want to time travel
+            // a TIMESTAMP in SECONDS can be assigned to each which will limit the
+            // MySQL query to find only if each's record's time is < TIMESTAMP
+            // todo: add > option
             ubbqTestLimitToBeforeTimestampSeconds: {
                 users: null,
-                categories: null,
                 forums: null,
                 topics: null,
                 posts: null
             },
 
-            // meaning this will reuse the ubb tmp files
-            dontGetFromUbb: false,
-            // meaning this won't insert into nbb db
-            dontSaveToNbb: false,
-
+            // generate passwords for the users, yea
             passwordGen: {
                 chars: "!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890",
                 len: 13
             },
 
+
             // to be randomly selected from migrating the ubb.forums
             nbbCategoriesColorClasses: ["category-darkblue", "category-blue", "category-purple"],
             nbbCategoriesIcons: ["icon-comment"],
 
+            // this will set the nodebb "email:*:confirm" records to true
+            // and will del all the "confirm:*KEYS*:emails" too
+            // if you want to auto confirm the user's accounts..
             nbbAutoConfirmEmails: true,
 
+
             // will create a nbb group for the ubb migrated moderators
-            ubbToNbbModeratorsGroupName : "GoldModerators",
+            // this Group, till 11/26/2013 does not mean they have Moderators privileges
+            ubbToNbbModeratorsGroupName : "GlodClub",
             ubbToNbbModeratorsGroupDescription: "Old timers forums moderators",
             // per nbb default setup, 1000+ reputation makes you a moderator
+            // this what sets them to moderators, Reputation yo !
             ubbToNbbModeratorsAddedReputation: 1000,
 
             nginx: {
-                // ONLY replace the MY_UBB_PATH and MY_NBB_PATH and leave the ${FROM} and ${TO} as they will be replaced appropriately
+                // ONLY replace the 'MY_UBB_PATH' and 'MY_NBB_PATH' and leave the ${FROM} and ${TO} as they will be replaced appropriately
                 // or i guess if you know what you're doing then modify at will
                 // example: rewrite ^/MY_UBB_PATH/users/123(.*)$ /MY_NBB_PATH/user/elvis/$1 last;
                 rule: " rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;"
@@ -290,6 +248,7 @@ module.exports = {
             try {
 
                 // todo: won't work on windows
+                // todo: do i even need this?
                 node = execSync("which node", true).stdout;
                 logger.debug("node lives here: " + node);
 
@@ -301,7 +260,7 @@ module.exports = {
 
             } catch (e){
                 logger.error(e);
-                logger.info("COMMAND")
+                logger.info("COMMAND");
                 logger.info(result);
                 this.exit(1);
             }
@@ -315,8 +274,9 @@ module.exports = {
         };
 
         if (this.config.nbbReSetup.flushdb) {
-            RDB.flushdb(function(a, b){
-                logger.info("flushdb done. " + b );
+            RDB.flushdb(function(err, res){
+                if (err) throw err;
+                logger.info("flushdb done. " + res);
                 setup();
             });
         } else {
@@ -334,8 +294,7 @@ module.exports = {
             users: {},
             forums: {},
             topics: {},
-            posts: {},
-            skippedUsers: {}
+            posts: {}
         };
 
         if (!this.config.ubbDbConfig) throw new Error("config.ubbDbConfig needs to be passed in to migrate()");
@@ -343,15 +302,6 @@ module.exports = {
         // mysql connection to ubb database
         this.ubbConnection = mysql.createConnection(this.config.ubbDbConfig);
         this.ubbConnection.connect();
-
-        if (!this.config.dontGetFromUbb)
-            Object.keys(this.config.ubbTmpFiles).forEach(function(key){
-                fs.createFileSync(self.config.ubbTmpFiles[key]);
-            });
-
-        Object.keys(this.config.nbbTmpFiles).forEach(function(key){
-            fs.createFileSync(self.config.nbbTmpFiles[key]);
-        });
 
         fs.createFileSync(this.config.ubbToNbbMapFile);
 
@@ -399,6 +349,7 @@ module.exports = {
     backupNbbConfigs: function(next){
         var self = this;
         RDB.hgetall("config", function(err, data){
+            if (err) throw err;
             self.config.nbbConfigs = data || {};
             next();
         });
@@ -420,13 +371,22 @@ module.exports = {
         if (this.config.nbbAutoConfirmEmails)
             nbbTempConfigs['email:smtp:host'] = "this.mail.host.is.set.by.ubbmigrator.todisable.email.confirmation.i.hope.this.wont.work";
 
-        RDB.hmset("config", nbbTempConfigs, function(){
+        RDB.hmset("config", nbbTempConfigs, function(err){
+            if (err) throw err;
             next();
         });
     },
 
+    // im nice
     restoreNbbConfigs: function(next){
-        RDB.hmset("config", this.config.nbbConfigs, function(){
+        var self = this;
+        RDB.hmset("config", this.config.nbbConfigs, function(err){
+            if (err) {
+                logger.error("Something went wrong while restoring your nbb configs");
+                logger.warn("here are your backedup configs, you do it.");
+                logger.warn(self.config.nbbConfig);
+                throw err;
+            }
             next();
         });
     },
@@ -466,7 +426,8 @@ module.exports = {
 
             function(err, rows) {
                 if (err) throw err;
-                self.ubbToNbbMap.users = self._ubbNormalizeUsers(self._convertListToMap(rows, "_ouid"));
+                logger.info("Users query came back with " + rows.length + " records, now preparing, please be patient.");
+                self.ubbToNbbMap.users = self._ubbNormalizeUsers(rows);
                 next();
             });
     },
@@ -498,13 +459,10 @@ module.exports = {
     },
 
     _ubbNormalizeUsers: function(users) {
-        var self = this, first = true, kept = 0;
-        var arr = Object.keys(users);
+        var self = this, kept = 0;
 
-        //fs.writeFileSync(self.config.ubbTmpFiles.users, "");
-
-        arr.forEach(function(_ouid, ui){
-            var user = users[_ouid];
+        users.forEach(function(user, ui) {
+            var _ouid = user._ouid;
             if (user._username && user._joindate && user._email) {
 
                 user = $.extend({}, user, self._makeValidNbbUsername(user._username, user._userDisplayName, user._ouid));
@@ -512,7 +470,9 @@ module.exports = {
 
                     // nbb forces signatures to be less than 150 chars
                     user.signature = self.truncateStr(user._signature || "", 150);
+                    // todo: htmltomarkdown too slow!
                     // user.signatureMd = self.hazHtml(user.signature) ? htmlToMarkdown(user.signature) : user.signature;
+                    user.signatureMd = user.signature;
 
                     // from unix timestamp (s) to JS timestamp (ms)
                     user._joindate = user._joindate * 1000;
@@ -522,8 +482,8 @@ module.exports = {
                     user.email = user._email.toLowerCase();
 
                     // I don't know about you about I noticed a lot my users have incomplete urls
-                    //user.avatar = self._isValidUrl(user._avatar) ? user._avatar : "";
-                    //user.website = self._isValidUrl(user._website) ? user._website : "";
+                    // user.avatar = self._isValidUrl(user._avatar) ? user._avatar : "";
+                    // user.website = self._isValidUrl(user._website) ? user._website : "";
                     // this is a little faster, and less agressive
                     user.avatar = self._isValidUrlSimple(user._avatar) ? user._avatar : "";
                     user.website = self._isValidUrlSimple(user._website) ? user._website : "";
@@ -532,14 +492,10 @@ module.exports = {
                     user.password = self._genRandPwd(self.config.passwordGen.len, self.config.passwordGen.chars);
 
                     kept++;
-                    users[_ouid] = user;
-                    //fs.appendFileSync(self.config.ubbTmpFiles.users, (first ? "[" : ",\n") + JSON.stringify(user, null, 4));
-
-                    if (first)
-                        first = false;
+                    users[ui] = user;
 
                     if (ui % 1000 == 0)
-                        logger.info("filetered " + ui + " users so far.");
+                        logger.info("Prepared " + ui + " users so far.");
 
                 } else {
                     logger.warn("[!username] skipping user " + user._username + ":" + user._email + " _ouid: " + _ouid);
@@ -550,9 +506,8 @@ module.exports = {
                 delete users[_ouid];
             }
         });
-        //fs.appendFileSync(self.config.ubbTmpFiles.users, "]");
-        logger.info("filtering users done. kept " + kept + "/" + arr.length);
-        return users;
+        logger.info("Preparing users done. kept " + kept + "/" + users.length);
+        return self._convertListToMap(users, "_ouid");
     },
 
     // get ubb forums
@@ -571,21 +526,18 @@ module.exports = {
 
             function(err, rows){
                 if (err) throw err;
-                logger.info("Forums query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
-                self.ubbToNbbMap.forums = self._ubbNormalizeForums(self._convertListToMap(rows, "_ofid"));
+                logger.info("Forums query came back with " + rows.length + " records, now preparing, please be patient.");
+                self.ubbToNbbMap.forums = self._ubbNormalizeForums(rows);
                 next();
             });
     },
 
     // ubb.forums == nbb.categories
     _ubbNormalizeForums: function(forums) {
-        var self = this, first = true, kept = 0;
-        var arr = Object.keys(forums);
+        var self = this, kept = 0;
 
-        //fs.writeFileSync(self.config.ubbTmpFiles.forums, "");
-
-        arr.forEach(function(_ofid, fi){
-            var forum = forums[_ofid];
+        forums.forEach(function(forum, fi){
+            var _ofid = forum._ofid;
             if (forum._name && forum._description) {
 
                 // set some defaults since i don't have them
@@ -599,32 +551,26 @@ module.exports = {
                 forum.description = forum._description;
 
                 kept++;
-                forums[_ofid] = forum;
-                //fs.appendFileSync(self.config.ubbTmpFiles.forums, (first ? "[" : ",\n") + JSON.stringify(forum, null, 4));
-
-                if (first)
-                    first = false;
+                forums[fi] = forum;
 
                 if (fi % 1000 == 0)
-                    logger.info("filetered " + fi + " forums so far.");
+                    logger.info("Prepared " + fi + " forums so far.");
 
             } else {
                 logger.warn("skipping forum " + forum._name + ":" + forum._description + " _ofid: " + _ofid);
                 delete forums[_ofid];
             }
         });
-        //fs.appendFileSync(self.config.ubbTmpFiles.forums, "]");
 
-        logger.info("filtering forums done. kept " + kept + "/" + arr.length);
-        return forums;
+        logger.info("Preparing forums done. kept " + kept + "/" + forums.length);
+        return self._convertListToMap(forums, "_ofid");
     },
-
 
     // get ubb topics
     ubbGetTopics: function(next) {
-        // POST_PARENT_ID as _parent, POST_PARENT_USER_ID as _parentUserId, TOPIC_ID as _topicId
         var self = this, prefix = self.config.ubbTablePrefix;
-        var query =             "SELECT "
+        var query =
+            "SELECT "
             + prefix + "TOPICS.TOPIC_ID as _otid, "
             + prefix + "TOPICS.FORUM_ID as _forumId, "
             + prefix + "TOPICS.POST_ID as _postId, "
@@ -653,21 +599,19 @@ module.exports = {
         this.ubbq(query,
             function(err, rows){
                 if (err) throw err;
-                logger.info("Topics query came back with " + rows.length + " records, now filtering, please be patient.");
-                self.ubbToNbbMap.topics = self._ubbNormalizeTopics(self._convertListToMap(rows, "_otid"));
+                logger.info("Topics query came back with " + rows.length + " records, now preparing, please be patient.");
+                self.ubbToNbbMap.topics = self._ubbNormalizeTopics(rows);
                 next();
             });
     },
 
     // ubb.forums == nbb.categories
     _ubbNormalizeTopics: function(topics) {
-        var self = this, first = true, kept = 0
-        , arr = Object.keys(topics);
-
+        var self = this, kept = 0;
 
         //fs.writeFileSync(self.config.ubbTmpFiles.topics, "");
-        arr.forEach(function(_otid, ti){
-            var topic = topics[_otid];
+        topics.forEach(function(topic, ti){
+            var _otid = topic._otid;
 
             // if that's the *DoNotDelete* use created by ubb, then let's assign that post to the initial user by nbb
             if (!self.ubbToNbbMap.users[topic._userId] && topic._userId == 1) {
@@ -682,7 +626,7 @@ module.exports = {
                 // from s to ms
                 var time = topic._datetime * 1000;
 
-               // topic.content = self.hazHtml(topic._firstPostBody || "") ? htmlToMarkdown(topic._firstPostBody || "") : topic._firstPostBody || "";
+                // topic.content = self.hazHtml(topic._firstPostBody || "") ? htmlToMarkdown(topic._firstPostBody || "") : topic._firstPostBody || "";
                 topic.content = topic._firstPostBody || "";
 
                 topic.title = topic._title ? topic._title[0].toUpperCase() + topic._title.substr(1) : "Untitled";
@@ -692,13 +636,10 @@ module.exports = {
                 topic.pinned = topic._pinned;
 
                 kept++;
-                topics[topic._otid] = topic;
-                //fs.appendFileSync(self.config.ubbTmpFiles.topics, (first ? "[" : ",\n") + JSON.stringify(topic, null, 4));
+                topics[ti] = topic;
 
-                if (first)
-                    first = false;
                 if (ti % 1000 == 0)
-                    logger.info("filtered " + ti + " topics so far.");
+                    logger.info("Prepared " + ti + " topics so far.");
             } else {
                 var requiredValues = [topic._forumId, user];
                 var requiredKeys = ["topic._forumId","user"];
@@ -707,9 +648,9 @@ module.exports = {
                 delete topics[_otid];
             }
         });
-        //fs.appendFileSync(self.config.ubbTmpFiles.topics, "]");
-        logger.info("filtering topics done. kept " + kept + "/" + arr.length);
-        return topics;
+
+        logger.info("Preparing topics done. kept " + kept + "/" + topics.length);
+        return self._convertListToMap(topics, "_otid")
     },
 
     // get ubb forums
@@ -727,19 +668,18 @@ module.exports = {
 
             function(err, rows){
                 if (err) throw err;
-                logger.info("Posts query came back with " + rows.length + " records, now writing to tmp dir, please be patient.");
-                self.ubbToNbbMap.posts = self._ubbNormalizePosts(self._convertListToMap(rows, "_opid"));
+                logger.info("Posts query came back with " + rows.length + " records, now preparing, please be patient.");
+                self.ubbToNbbMap.posts = self._ubbNormalizePosts(rows);
                 next();
             });
     },
 
     _ubbNormalizePosts: function(posts) {
         var self = this, kept = 0;
-        var arr = Object.keys(posts);
 
-        //fs.writeFileSync(self.config.ubbTmpFiles.posts, "");
-        arr.forEach(function(_opid, pi){
-            var post = posts[_opid];
+        posts.forEach(function(post, pi){
+            var _opid = post._opid;
+
             var topic = self.ubbToNbbMap.topics[post._topicId];
 
             // if that's the *DoNotDelete* use created by ubb, then let's assign that post to the initial user by nbb
@@ -752,11 +692,14 @@ module.exports = {
             var user = self.ubbToNbbMap.users[post._userId];
 
             if (post._parent && topic && user) {
+
                 // from s to ms
                 var time = post._datetime * 1000;
 
-                post.content = self.hazHtml(post._body) ? htmlToMarkdown(post._body) : post._body;
+                // todo: htmltomarkdown tooo slow!
+                // post.content = self.hazHtml(post._body) ? htmlToMarkdown(post._body) : post._body;
                 post.content = post._body || "";
+
                 post.timestamp = time;
                 post.relativeTime = new Date(time).toISOString();
 
@@ -764,7 +707,7 @@ module.exports = {
                 self.ubbToNbbMap.posts[post._opid] = post;
 
                 if (pi % 1000 == 0)
-                    logger.info("filetered " + pi + " posts so far.");
+                    logger.info("Prepared " + pi + " posts so far.");
             } else {
                 var requiredValues = [post._parent, topic, user];
                 var requiredKeys = ["post._parent", "topic", "user"];
@@ -773,8 +716,8 @@ module.exports = {
                 delete posts[_opid];
             }
         });
-        logger.info("filtering posts done. kept " + kept + "/" + arr.length);
-        return posts;
+        logger.info("Preparing posts done. kept " + kept + "/" + posts.length);
+        return self._convertListToMap(posts, "_opid");
     },
 
     // save the UBB users to nbb's redis
@@ -839,7 +782,7 @@ module.exports = {
 
                     var redirectRule = self.redirectRule("users/" + user._ouid + "/" + user._username + "/", "user/" + user.userslug);
 
-                    self.ubbToNbbMap.users[user._ouid] = {uid: uid, redirectRule: redirectRule, avatar: user.avatar, customPicture: user.customPicture};
+                    self.ubbToNbbMap.users[user._ouid] = {uid: uid, email: user.email, redirectRule: redirectRule, avatar: user.avatar, customPicture: user.customPicture, password: user.password};
                     User.setUserFields(uid, _u_);
                     if (self.config.nbbAutoConfirmEmails)
                         RDB.set('email:' + user.email + ':confirm', true);
