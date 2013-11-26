@@ -5,7 +5,7 @@
  This Converter is written and tested for UBB 7.5.7 which was released sometime in 2013, that migrates to NodeBB 0.1.1
  */
 
-// todo !!!!! HITTING MEMORY LIMITS OVER 18k POSTS !!
+// todo !!!!! HITTING MEMORY LIMITS OVER 18k POSTS IF MARKDOWNING IS TURNED ON !!
 // todo maybe go through all users who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to my old forum avatar dir
 // todo go through all the html content and Markdown it
 
@@ -147,6 +147,9 @@ module.exports = {
             },
             function(next) {
                 self.restoreNbbConfigs(next);
+            },
+            function(next) {
+                self.report(next);
             },
             function(){
                 self.exit();
@@ -295,6 +298,11 @@ module.exports = {
             forums: {},
             topics: {},
             posts: {},
+
+            savedUsers: [],
+            savedForums: [],
+            savedTopics: [],
+            savedPosts: [],
 
             skippedUsers: [],
             skippedForums: [],
@@ -765,12 +773,17 @@ module.exports = {
                         _u_.gravatarpicture = user.avatar;
                         _u_.picture = user.avatar;
                         user.customPicture = true;
+                    } else {
+                        user.customPicture = false;
                     }
 
                     var redirectRule = self.redirectRule("users/" + user._ouid + "/" + user._username + "/", "user/" + user.userslug);
 
                     self.ubbToNbbMap.users[user._ouid] = {uid: uid, email: user.email, redirectRule: redirectRule, avatar: user.avatar, customPicture: user.customPicture, password: user.password};
                     User.setUserFields(uid, _u_);
+
+                    _u_.uid = uid;
+                    self.ubbToNbbMap.savedUsers.push($.extend({}, user, _u_));
                     if (self.config.nbbAutoConfirmEmails)
                         RDB.set('email:' + user.email + ':confirm', true);
                 }
@@ -800,7 +813,7 @@ module.exports = {
 
         async.eachSeries(_categories, function(key, save) {
             var category = categories[key];
-            logger.debug("[idx:" + count++ + "] saving category: " + category.name);
+            logger.debug("\n\n[idx:" + count++ + "] saving category: " + category.name);
 
             Categories.create(category, function(err, categoryData) {
 
@@ -809,7 +822,7 @@ module.exports = {
                     save();
                 } else {
                     var redirectRule = self.redirectRule("forums/" + category._ofid + "/", "category/" + categoryData.slug);
-
+                    self.ubbToNbbMap.savedForums.push($.extend({}, category, categoryData));
                     self.ubbToNbbMap.forums[category._ofid] = {cid: categoryData.cid, redirectRule: redirectRule};
                 }
 
@@ -827,31 +840,46 @@ module.exports = {
 
         var topics = self.ubbToNbbMap.topics;
         var _topics = Object.keys(topics);
+
         async.eachSeries(_topics, function(key, save) {
-
                 var topic = topics[key];
-                topic.cid = self.ubbToNbbMap.forums[topic._forumId].cid;
-                topic.uid = self.ubbToNbbMap.users[topic._userId].uid;
 
-                logger.debug("[idx:" + count++ + "] saving topic: " + topic.title);
-                Topics.post(topic.uid, topic.title, topic.content, topic.cid, function(err, ret){
-                    if (err) {
-                        logger.error(err);
-                        save();
-                    } else {
-                        var redirectRule = self.redirectRule("topics/" + topic._otid + "/", "topic/" + ret.topicData.slug);
+                if (!self.ubbToNbbMap.forums[topic._forumId] || !self.ubbToNbbMap.users[topic._userId]){
+                    logger.error("\n\ntopic: '" + topic._title + "' _of: " + !!self.ubbToNbbMap.forums[topic._forumId] + " _ou: " + !!self.ubbToNbbMap.users[topic._userId] +   " .. skipping");
+                    self.ubbToNbbMap.skippedTopics.push(topic);
+                    save();
+                } else {
 
-                        Topics.setTopicField(ret.topicData.tid, "timestamp", topic.timestamp);
-                        Topics.setTopicField(ret.topicData.tid, "viewcount", topic.viewcount);
-                        Topics.setTopicField(ret.topicData.tid, "pinned", topic.pinned);
-                        Posts.setPostField(ret.postData.pid, "timestamp", topic.timestamp, function (){
-                            Posts.setPostField(ret.postData.pid, "relativeTime", topic.relativeTime, function (){
-                                save();
+                    topic.cid = self.ubbToNbbMap.forums[topic._forumId].cid;
+                    topic.uid = self.ubbToNbbMap.users[topic._userId].uid;
+
+                    logger.debug("\n\n[idx:" + count++ + "] saving topic: " + topic.title);
+                    Topics.post(topic.uid, topic.title, topic.content, topic.cid, function(err, ret){
+                        if (err) {
+                            logger.debug("_of");
+                            logger.debug(self.ubbToNbbMap.forums[topic._forumId]);
+                            logger.debug("_ou");
+                            logger.debug(self.ubbToNbbMap.users[topic._userId]);
+
+                            self.ubbToNbbMap.skippedTopics.push(topic);
+                            logger.error(err);
+                            save();
+                        } else {
+                            var redirectRule = self.redirectRule("topics/" + topic._otid + "/", "topic/" + ret.topicData.slug);
+
+                            Topics.setTopicField(ret.topicData.tid, "timestamp", topic.timestamp);
+                            Topics.setTopicField(ret.topicData.tid, "viewcount", topic.viewcount);
+                            Topics.setTopicField(ret.topicData.tid, "pinned", topic.pinned);
+                            Posts.setPostField(ret.postData.pid, "timestamp", topic.timestamp, function (){
+                                Posts.setPostField(ret.postData.pid, "relativeTime", topic.relativeTime, function (){
+                                    self.ubbToNbbMap.savedTopics.push(topic);
+                                    save();
+                                });
                             });
-                        });
-                        self.ubbToNbbMap.topics[topic._otid] = {tid: ret.topicData.tid, redirectRule: redirectRule};
-                    }
-                });
+                            self.ubbToNbbMap.topics[topic._otid] = {tid: ret.topicData.tid, redirectRule: redirectRule};
+                        }
+                    });
+                }
             },
             function (){
                 next();
@@ -867,26 +895,40 @@ module.exports = {
 
         async.eachSeries(_posts, function(key, save) {
                 var post = posts[key];
-                post.tid = self.ubbToNbbMap.topics[post._topicId].tid;
-                post.uid = self.ubbToNbbMap.users[post._userId].uid;
+                if (!self.ubbToNbbMap.topics[post._topicId] || !self.ubbToNbbMap.users[post._userId]) {
+                    logger.error("\n\npost: '" + post._opid + "' _ot: " + !!self.ubbToNbbMap.topics[post._topicId] + " _ou: " + !!self.ubbToNbbMap.users[post._userId] +   " .. skipping");
+                    self.ubbToNbbMap.skippedPosts.push(post);
+                    save();
+                } else {
+                    post.tid = self.ubbToNbbMap.topics[post._topicId].tid;
+                    post.uid = self.ubbToNbbMap.users[post._userId].uid;
 
-                logger.debug("[idx: " + key + "] saving post: " + post._opid);
-                Posts.create(post.uid, post.tid, post.content, function(err, postData){
+                    logger.debug("\n\n[idx: " + key + "] saving post: " + post._opid);
+                    Posts.create(post.uid, post.tid, post.content || "", function(err, postData){
+                        if (err) {
 
-                    if (err) {
-                        logger.error(err);
-                        save();
-                    } else {
-                        var redirectRule = self.redirectRule("topics/" + post._topicId + "/(.)*#Post" + post._opid, "topic/" + post.tid + "#" + postData.pid);
+                            logger.error(err);
+                            logger.debug("_ot");
+                            logger.debug(self.ubbToNbbMap.topics[post._topicId]);
+                            logger.debug("_ou");
+                            logger.debug(self.ubbToNbbMap.users[topic._userId] + "\n\n");
 
-                        Posts.setPostField(postData.pid, "timestamp", post.timestamp, function (){
-                            Posts.setPostField(postData.pid, "relativeTime", post.relativeTime, function (){
-                                self.ubbToNbbMap.posts[post._opid] = {pid: postData.pid, redirectRule: redirectRule};
-                                save();
+
+                            self.ubbToNbbMap.skippedPosts.push(post);
+                            save();
+                        } else {
+                            var redirectRule = self.redirectRule("topics/" + post._topicId + "/(.)*#Post" + post._opid, "topic/" + post.tid + "#" + postData.pid);
+
+                            Posts.setPostField(postData.pid, "timestamp", post.timestamp, function (){
+                                Posts.setPostField(postData.pid, "relativeTime", post.relativeTime, function (){
+                                    self.ubbToNbbMap.savedPosts.push(post);
+                                    self.ubbToNbbMap.posts[post._opid] = {pid: postData.pid, redirectRule: redirectRule};
+                                    save();
+                                });
                             });
-                        });
-                    }
-                });
+                        }
+                    });
+                }
             },
             function(){
                 next();
@@ -894,6 +936,38 @@ module.exports = {
     },
 
     // helpers
+
+    report: function(next){
+        logger.info("Forums: skipped: " + this.ubbToNbbMap.skippedForums.length + " - saved: " + this.ubbToNbbMap.savedForums.length);
+        logger.info("Users: skipped: " + this.ubbToNbbMap.skippedUsers.length + " - saved: " + this.ubbToNbbMap.savedUsers.length);
+        logger.info("Topics: skipped: " + this.ubbToNbbMap.skippedTopics.length + " - saved: " + this.ubbToNbbMap.savedTopics.length);
+        logger.info("Posts: skipped: " + this.ubbToNbbMap.skippedPosts.length + " - saved: " + this.ubbToNbbMap.savedPosts.length);
+
+        logger.info("Writing a large json map on disk here: " + this.ubbToNbbMapFile + " please be patient ... ");
+        logger.info("it will look something like this: ");
+        logger.info("{\nsavedUsers: {...},\nsavedForums: {...},\nsavedTopics: {...},\nsavedPosts: {...},\nskippedUsers: {...},\nskippedForums: {...},\nskippedTopics: {...},\nskippedPosts: {..}}");
+
+        this.slowWriteJSONtoFile(this.ubbToNbbMapFile,
+            {
+                savedUsers: this.ubbToNbbMap.skippedUsers,
+                savedForums: this.ubbToNbbMap.savedForums,
+                savedTopics: this.ubbToNbbMap.savedTopics,
+                savedPosts: this.ubbToNbbMap.savedPosts,
+                skippedUsers: this.ubbToNbbMap.skippedUsers,
+                skippedForums: this.ubbToNbbMap.skippedForums,
+                skippedTopics: this.ubbToNbbMap.skippedTopics,
+                skippedPosts: this.ubbToNbbMap.skippedPosts
+            },
+            function(err){
+                if (err) {
+                    logger.error("Error writing ubbToNbbMap. here's a dump. Enjoy.");
+                    console.log(this.ubbToNbbMap);
+                    throw err;
+                } else {
+                    next();
+                }
+            });
+    },
 
     // remove this
     saveMap: function(file, map, length, wat, next, key) {
