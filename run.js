@@ -2,7 +2,8 @@ var ubb = require("./library.js");
 ubb.migrate({
 
     // or just "debug" for all
-    log: "info,warn,error",
+    //log: "info,warn,error",
+    log: "debug",
 
     // ubb db config
     ubbDbConfig: {
@@ -19,19 +20,20 @@ ubb.migrate({
 
         // these will be stringified into a string and passed to --setup
         config: {
-            // these 4 are required to bypass the prompts
-            "admin:username": "admin",
-            "admin:password": "password",
-            "admin:password:confirm": "password",
-            "admin:email": "you@example.com",
+            'admin:username': 'admin',
+            'admin:password': 'password',
+            'admin:password:confirm': 'password',
+            'admin:email': 'you@example.com',
 
-            // i'll let nodebb decide the defaults here
-            "redis:host": "",
-            "redis:port": null,
-            "redis:password": "",
-            "redis:database": "",
-            "bind_address": "",
-            "secret": ""
+            'base_url': 'http://localhost',
+            'port': '4567',
+            'use_port': 'y',
+            'redis:host': '127.0.0.1',
+            'redis:port': 6379,
+            'redis:password': '',
+            'redis:database': 0,
+            'bind_address': '0.0.0.0',
+            'secret': ''
         }
     },
 

@@ -176,12 +176,14 @@ module.exports = {
                     'admin:password:confirm': 'password',
                     'admin:email': 'you@example.com',
 
-                    // i'll let nodebb decide the defaults here
-                    'redis:host': '',
-                    'redis:port': null,
+                    'base_url': 'http://localhost',
+                    'port': '4567',
+                    'use_port': 'y',
+                    'redis:host': '127.0.0.1',
+                    'redis:port': 6379,
                     'redis:password': '',
-                    'redis:database': '',
-                    'bind_address': '',
+                    'redis:database': 0,
+                    'bind_address': '0.0.0.0',
                     'secret': ''
                 }
             },
@@ -259,9 +261,8 @@ module.exports = {
                 logger.debug('node lives here: ' + node);
 
                 // assuming we're in nodebb/node_modules/nodebb-plugin-ubbmigrator
-                command = node + ' ../../app.js --setup="' + setupVal + '"';
-                logger.info('Calling this command on your behalf: \n');
-                logger.info(command + '\n\n');
+                command = node + ' ../../app.js --setup=\'' + setupVal + '\'';
+                logger.info('Calling this command on your behalf: \n' + command + '\n\n');
                 result = execSync(command, true);
 
             } catch (e){
