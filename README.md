@@ -1,4 +1,4 @@
-###Due to [issue #2](https://github.com/akhoury/nodebb-plugin-ubbmigrator/issues/2) this plugins has been rendered unusable (unless you want to hack NodeBB), hang on, i'm on it.
+###Due to [issue #2](https://github.com/akhoury/nodebb-plugin-ubbmigrator/issues/2) this plugin has been rendered unusable (unless you want to hack NodeBB), but we're on it.
 
 <br />
 
