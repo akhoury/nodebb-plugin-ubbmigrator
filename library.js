@@ -721,14 +721,14 @@ module.exports = {
         var users = self.ubbToNbbMap.users;
         var _users = Object.keys(users);
 
-        async.eachSeries(_users, function(key, save) {
+        async.eachSeries(_users, function(key, done) {
             var user = users[key];
 
             // if that's the admin '**DONOTDELETE**' UBB User, skip
             if (user._ouid == 1 || !user.username) {
                 self.ubbToNbbMap.skippedUsers.push(user);
                 logger.warn('username: "' + (user.username || user._username) + '" is invalid.\n\n');
-                save();
+                done();
                 return;
             }
 
@@ -789,7 +789,7 @@ module.exports = {
                     if (self.config.nbbAutoConfirmEmails)
                         RDB.set('email:' + user.email + ':confirm', true);
                 }
-                save();
+                done();
             });
         }, function(){
 
@@ -813,7 +813,7 @@ module.exports = {
         var categories = self.ubbToNbbMap.forums;
         var _categories = Object.keys(categories);
 
-        async.eachSeries(_categories, function(key, save) {
+        async.eachSeries(_categories, function(key, done) {
             var category = categories[key];
             logger.debug('[idx:' + count++ + '] saving category: ' + category.name + '\n\n');
 
@@ -821,18 +821,18 @@ module.exports = {
 
                 if (err) {
                     logger.error(err);
-                    save();
+                    done();
                 } else {
                     categoryData.redirectRule = self.redirectRule('forums/' + category._ofid + '/', 'category/' + categoryData.slug);
                     self.ubbToNbbMap.savedForums.push($.extend({}, category, categoryData));
                     self.ubbToNbbMap.forums[category._ofid] = {cid: categoryData.cid, redirectRule: categoryData.redirectRule};
                 }
 
-                save();
+                done();
             });
-        }, function(){
-            next();
-        });
+        },
+            next
+        );
     },
 
     // save the UBB topics to nbb's redis
@@ -842,13 +842,13 @@ module.exports = {
         var topics = self.ubbToNbbMap.topics;
         var _topics = Object.keys(topics);
 
-        async.eachSeries(_topics, function(key, save) {
+        async.eachSeries(_topics, function(key, done) {
                 var topic = topics[key];
 
                 if (!self.ubbToNbbMap.forums[topic._forumId] || !self.ubbToNbbMap.users[topic._userId]){
                     logger.error('topic: "' + topic._title + '" _of: ' + !!self.ubbToNbbMap.forums[topic._forumId] + ' _ou: ' + !!self.ubbToNbbMap.users[topic._userId] +   ' .. skipping\n\n');
                     self.ubbToNbbMap.skippedTopics.push(topic);
-                    save();
+                    done();
                 } else {
 
                     topic.cid = self.ubbToNbbMap.forums[topic._forumId].cid;
@@ -864,7 +864,7 @@ module.exports = {
 
                             self.ubbToNbbMap.skippedTopics.push(topic);
                             logger.error(err);
-                            save();
+                            done();
                         } else {
                             ret.topicData.redirectRule = self.redirectRule('topics/' + topic._otid + '/', 'topic/' + ret.topicData.slug);
 
@@ -875,7 +875,7 @@ module.exports = {
                             Posts.setPostField(ret.postData.pid, 'relativeTime', topic.relativeTime);
                             self.ubbToNbbMap.savedTopics.push($.extend({}, topic, ret.topicData));
                             self.ubbToNbbMap.topics[topic._otid] = {tid: ret.topicData.tid, redirectRule: ret.topicData.redirectRule};
-                            save();
+                            done();
                         }
                     });
                 }
@@ -892,12 +892,12 @@ module.exports = {
         var posts = self.ubbToNbbMap.posts;
         var _posts = Object.keys(posts);
 
-        async.eachSeries(_posts, function(key, save) {
+        async.eachSeries(_posts, function(key, done) {
                 var post = posts[key];
                 if (!self.ubbToNbbMap.topics[post._topicId] || !self.ubbToNbbMap.users[post._userId]) {
                     logger.error('post: "' + post._opid + '" _ot: ' + !!self.ubbToNbbMap.topics[post._topicId] + ' _ou: ' + !!self.ubbToNbbMap.users[post._userId] +   ' .. skipping\n\n');
                     self.ubbToNbbMap.skippedPosts.push(post);
-                    save();
+                    done();
                 } else {
                     post.tid = self.ubbToNbbMap.topics[post._topicId].tid;
                     post.uid = self.ubbToNbbMap.users[post._userId].uid;
@@ -914,21 +914,20 @@ module.exports = {
 
 
                               self.ubbToNbbMap.skippedPosts.push(post);
-                              save();
+                              done();
                           } else {
                               postData.redirectRule = self.redirectRule('topics/' + post._topicId + '/(.)*#Post' + post._opid, 'topic/' + post.tid + '#' + postData.pid);
 
                               Posts.setPostField(postData.pid, 'timestamp', post.timestamp);
                               Posts.setPostField(postData.pid, 'relativeTime', post.relativeTime);
                               self.ubbToNbbMap.savedPosts.push($.extend({}, post, postData));
-                              save();
+                              done();
                           }
                       });
                 }
             },
-            function(){
-                next();
-            });
+            next
+        );
     },
 
     // helpers
