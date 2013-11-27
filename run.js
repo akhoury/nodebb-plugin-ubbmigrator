@@ -41,8 +41,8 @@ ubb.migrate({
     // hard timestamp in seconds limit on some stuff since they're huge
     ubbqTestLimitToBeforeTimestampSeconds: {
         // before 2004 sometime
-        users: null, //1049942244, // null, //1081478244,
-        topics: null, // null, //1049942244,
-        posts: null // null //1049942244
+        users: 1049942244, //1049942244, // null, //1081478244,
+        topics: 1049942244, // null, //1049942244,
+        posts: 1049942244 // null //1049942244
     }
 });

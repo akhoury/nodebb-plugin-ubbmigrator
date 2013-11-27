@@ -258,7 +258,7 @@ module.exports = {
                 // assuming we're in nodebb/node_modules/nodebb-plugin-ubbmigrator
                 command = node + " ../../app.js --setup='" + setupVal + "'";
                 logger.info("Calling this command on your behalf: \n");
-                logger.info(command);
+                logger.info(command + "\n\n");
                 result = execSync(command, true);
 
             } catch (e){
@@ -777,9 +777,9 @@ module.exports = {
                         user.customPicture = false;
                     }
 
-                    var redirectRule = self.redirectRule("users/" + user._ouid + "/" + user._username + "/", "user/" + user.userslug);
+                    _u_.redirectRule = self.redirectRule("users/" + user._ouid + "/" + user._username + "/", "user/" + user.userslug);
 
-                    self.ubbToNbbMap.users[user._ouid] = {uid: uid, email: user.email, redirectRule: redirectRule, avatar: user.avatar, customPicture: user.customPicture, password: user.password};
+                    self.ubbToNbbMap.users[user._ouid] = {uid: uid, email: user.email, redirectRule: _u_.redirectRule, avatar: user.avatar, customPicture: user.customPicture, password: user.password};
                     User.setUserFields(uid, _u_);
 
                     _u_.uid = uid;
@@ -821,9 +821,9 @@ module.exports = {
                     logger.error(err);
                     save();
                 } else {
-                    var redirectRule = self.redirectRule("forums/" + category._ofid + "/", "category/" + categoryData.slug);
+                    categoryData.redirectRule = self.redirectRule("forums/" + category._ofid + "/", "category/" + categoryData.slug);
                     self.ubbToNbbMap.savedForums.push($.extend({}, category, categoryData));
-                    self.ubbToNbbMap.forums[category._ofid] = {cid: categoryData.cid, redirectRule: redirectRule};
+                    self.ubbToNbbMap.forums[category._ofid] = {cid: categoryData.cid, redirectRule: categoryData.redirectRule};
                 }
 
                 save();
@@ -865,18 +865,18 @@ module.exports = {
                             logger.error(err);
                             save();
                         } else {
-                            var redirectRule = self.redirectRule("topics/" + topic._otid + "/", "topic/" + ret.topicData.slug);
+                            ret.topicData.redirectRule = self.redirectRule("topics/" + topic._otid + "/", "topic/" + ret.topicData.slug);
 
                             Topics.setTopicField(ret.topicData.tid, "timestamp", topic.timestamp);
                             Topics.setTopicField(ret.topicData.tid, "viewcount", topic.viewcount);
                             Topics.setTopicField(ret.topicData.tid, "pinned", topic.pinned);
                             Posts.setPostField(ret.postData.pid, "timestamp", topic.timestamp, function (){
                                 Posts.setPostField(ret.postData.pid, "relativeTime", topic.relativeTime, function (){
-                                    self.ubbToNbbMap.savedTopics.push(topic);
+                                    self.ubbToNbbMap.savedTopics.push($.extend({}, topic, ret.topicData));
                                     save();
                                 });
                             });
-                            self.ubbToNbbMap.topics[topic._otid] = {tid: ret.topicData.tid, redirectRule: redirectRule};
+                            self.ubbToNbbMap.topics[topic._otid] = {tid: ret.topicData.tid, redirectRule: ret.topicData.redirectRule};
                         }
                     });
                 }
@@ -917,15 +917,12 @@ module.exports = {
                             self.ubbToNbbMap.skippedPosts.push(post);
                             save();
                         } else {
-                            var redirectRule = self.redirectRule("topics/" + post._topicId + "/(.)*#Post" + post._opid, "topic/" + post.tid + "#" + postData.pid);
+                            postData.redirectRule = self.redirectRule("topics/" + post._topicId + "/(.)*#Post" + post._opid, "topic/" + post.tid + "#" + postData.pid);
 
-                            Posts.setPostField(postData.pid, "timestamp", post.timestamp, function (){
-                                Posts.setPostField(postData.pid, "relativeTime", post.relativeTime, function (){
-                                    self.ubbToNbbMap.savedPosts.push(post);
-                                    self.ubbToNbbMap.posts[post._opid] = {pid: postData.pid, redirectRule: redirectRule};
-                                    save();
-                                });
-                            });
+                            Posts.setPostField(postData.pid, "timestamp", post.timestamp);
+                            Posts.setPostField(postData.pid, "relativeTime", post.relativeTime);
+                            self.ubbToNbbMap.savedPosts.push($.extend({}, post, postData));
+                            save();
                         }
                     });
                 }
@@ -937,17 +934,26 @@ module.exports = {
 
     // helpers
 
-    report: function(next){
-        logger.info("Forums: skipped: " + this.ubbToNbbMap.skippedForums.length + " - saved: " + this.ubbToNbbMap.savedForums.length);
+    report: function(next) {
+        logger.info("\n\nREPORT: \n");
+
+        logger.info("REMEMBER TO:\n"
+            + "* Email all your users their new passwords, find them in the map file reported below."
+            + "* Go through all users in the saved map, each who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to your old forum avatar dir\n"
+            + "* All of the posts and topics content are still in HTML, I will try to write a nbb plugin to consume those, otherwise, you would have to go through all the html content and Markdown it, why haven't done that here? I tried, it's just too much of a memory hog\n"
+            + "* Make sure the old [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars working"
+            + "* Create a nodebb-theme that works with the site");
+
+        logger.info("\n\nForums: skipped: " + this.ubbToNbbMap.skippedForums.length + " - saved: " + this.ubbToNbbMap.savedForums.length);
         logger.info("Users: skipped: " + this.ubbToNbbMap.skippedUsers.length + " - saved: " + this.ubbToNbbMap.savedUsers.length);
         logger.info("Topics: skipped: " + this.ubbToNbbMap.skippedTopics.length + " - saved: " + this.ubbToNbbMap.savedTopics.length);
         logger.info("Posts: skipped: " + this.ubbToNbbMap.skippedPosts.length + " - saved: " + this.ubbToNbbMap.savedPosts.length);
 
-        logger.info("Writing a large json map on disk here: " + this.ubbToNbbMapFile + " please be patient ... ");
+        logger.info("\n\nWriting a large json map on disk here: " + this.config.ubbToNbbMapFile + " please be patient ... ");
         logger.info("it will look something like this: ");
-        logger.info("{\nsavedUsers: {...},\nsavedForums: {...},\nsavedTopics: {...},\nsavedPosts: {...},\nskippedUsers: {...},\nskippedForums: {...},\nskippedTopics: {...},\nskippedPosts: {..}}");
+        logger.log("{\n\t\tsavedUsers: {...},\n\t\tsavedForums: {...},\n\t\tsavedTopics: {...},\n\t\tsavedPosts: {...},\n\t\tskippedUsers: {...},\n\t\tskippedForums: {...},\n\t\tskippedTopics: {...},\n\t\tskippedPosts: {..}\n\t}");
 
-        this.slowWriteJSONtoFile(this.ubbToNbbMapFile,
+        this.slowWriteJSONtoFile(this.config.ubbToNbbMapFile,
             {
                 savedUsers: this.ubbToNbbMap.skippedUsers,
                 savedForums: this.ubbToNbbMap.savedForums,
@@ -958,15 +964,7 @@ module.exports = {
                 skippedTopics: this.ubbToNbbMap.skippedTopics,
                 skippedPosts: this.ubbToNbbMap.skippedPosts
             },
-            function(err){
-                if (err) {
-                    logger.error("Error writing ubbToNbbMap. here's a dump. Enjoy.");
-                    console.log(this.ubbToNbbMap);
-                    throw err;
-                } else {
-                    next();
-                }
-            });
+            next);
     },
 
     // remove this
@@ -992,9 +990,10 @@ module.exports = {
     },
 
     exit: function(code, msg){
-        logger.info("Exiting ... code: " + code +  " -- " + msg);
+        code = this.isNumber(code) ? code : 0;
+        logger.info("Exiting ... code: " + code + ( msg ? " msg: " + msg : "") );
         this.ubbDisconnect();
-        process.exit(this.isNumber(code) ? code : 0);
+        process.exit(code);
     },
 
     // disconnect from the ubb mysql database
@@ -1032,7 +1031,7 @@ module.exports = {
         }
         fs.appendFileSync(file, "}\n");
 
-        callback(null);
+        callback();
     },
 
     // writing json to file prop by prop to avoid Out of memory errors

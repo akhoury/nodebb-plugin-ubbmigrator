@@ -25,7 +25,7 @@ module.exports = {
         return this;
     },
     log: function(s){
-            console.log(this.p + "[log] " + s);
+            console.log(s);
     },
     error: function(s){
             console.log(this.p + "[error] " + s);
