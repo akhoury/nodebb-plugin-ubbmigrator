@@ -1,5 +1,4 @@
-###Don't have an official release yet; this is probably a pre-alpha verion, so it's fragile. Handle with care.
-<br />
+###Don't have an official release yet; this is probably a pre-alpha version, so it's fragile. Handle with care.
 <br />
 
 nodebb-plugin-ubbmigrator
