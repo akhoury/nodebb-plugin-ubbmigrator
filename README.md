@@ -15,8 +15,7 @@ UBB to NodeBB forum migrator, a one time use thing, you know, like a condom.
 read carefully: 
 
 - ####Users: 
-    * __Username__ YES. if a user have an invalid username per NodeBB rules, the migrator will try to clean it, then test again, if that's still invalid, the migrator will test the UBB.User.UserDisplayName, if that doesn't work, this user will be skipped.
-    * UBB for some reason allows duplicate users with same emails? so the first ones by ID orders will be saved, the rest will be skipped. (UBB appends [username]_dup[Number] next to the dups.. so those will be skipped too if the email is already used)
+    * __Username__ YES. if a user have an invalid username per NodeBB rules, the migrator will try to clean it, then test again, if that's still invalid, the migrator will test the UBB.User.UserDisplayName, if that doesn't work, this user will be skipped. UBB for some reason allows duplicate users with same emails? so the first ones by ID orders will be saved, the rest will be skipped. (UBB appends [username]_dup[Number] next to the dups.. so those will be skipped too if the email is already used)
     * __Passwords__ NO. UBB use MD5, NodeBB uses Sha1 I think, so can't do, the migrator will generate random passwords of length 13 and a set of characters (configurable), don't worry, the migrator will give out the clear text passwords in the report, so you can email them to your users, keep them safe.
     * __Admins & Moderators__: SORT-OF. NodeBB uses repuration for moderators access, so, even though I add the admins to the NodeBB.Administrators group, and also create a group for old timers (moderators), they don't really become admins nor moderators, so what I do here, is explicitely add reputation points (NodeBB default is 1000 + UBB.User.rating (to keep the karma)) - so .. you can keep track of your moderators and admins in the nodebb/admin panel, and manually add/remove them later.
     * __Joindate__ YES.
