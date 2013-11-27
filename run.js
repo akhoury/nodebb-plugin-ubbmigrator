@@ -5,12 +5,23 @@ ubb.migrate({
     //log: "info,warn,error",
     log: "debug",
 
-    // ubb db config
+//    ubbDbConfig: {
+//        host: "localhost",
+//        user: "ubb_user",
+//        password: "password",
+//        database: "ubb_test"
+//    },
+
+    // ubb_tiny live Db with mock data
+    // doesn't have anything worth stealing, don't waste your time
+    // also abusing it will only block access to it for a little while.
+    // oh if you want to set it locally just install mysql
+    // then mysql -uyourusername -hyourhost yourdatabasename -pyourpassword < ubb_tiny.sql
     ubbDbConfig: {
-        host: "localhost",
-        user: "ubb_user",
-        password: "password",
-        database: "ubb_test"
+        host: "us-cdbr-east-04.cleardb.com",
+        user: "bab20eb2cf65fe",
+        password: "8d1a480e",
+        database: "heroku_5c1b73282d8a005"
     },
 
     // re-setup my nodebb installation, basically calling node app.js --setup={...} with the configs sepcified
@@ -44,8 +55,8 @@ ubb.migrate({
     // hard timestamp in seconds limit on some stuff since they're huge
     ubbqTestLimitToBeforeTimestampSeconds: {
         // before 2004 sometime
-        users: null, //1049942244, // null, //1081478244,
-        topics: null, // null, //1049942244,
-        posts: null // null //1049942244
+        users: 1049942244, //1049942244, // null, //1081478244,
+        topics: 1049942244, // null, //1049942244,
+        posts: 1049942244 // null //1049942244
     }
 });

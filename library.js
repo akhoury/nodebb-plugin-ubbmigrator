@@ -710,7 +710,7 @@ module.exports = {
                 posts.slice(pi, 1);
             }
         });
-        logger.info('Preparing posts done. kept ' + kept + '/' + posts.length);
+        logger.info('Preparing posts done. kept ' + kept + '/' + posts.length + '\n\n\n');
         return self._convertListToMap(posts, '_opid');
     },
 
@@ -727,15 +727,15 @@ module.exports = {
             // if that's the admin '**DONOTDELETE**' UBB User, skip
             if (user._ouid == 1 || !user.username) {
                 self.ubbToNbbMap.skippedUsers.push(user);
-                logger.warn('username: "' + (user.username || user._username) + '" is invalid.');
+                logger.warn('username: "' + (user.username || user._username) + '" is invalid.\n\n');
                 save();
                 return;
             }
 
-            logger.debug('[idx: ' + key + '] saving user: ' + user.username);
+            logger.debug('[idx: ' + key + '] saving user: ' + user.username + '\n\n');
             User.create(user.username, user.password, user.email, function(err, uid) {
                 if (err) {
-                    logger.error(' username: "' + user.username + '" ' + err + ' .. skipping');
+                    logger.error(' username: "' + user.username + '" ' + err + ' .. skipping\n\n');
                     self.ubbToNbbMap.skippedUsers.push(user);
                 } else {
 
@@ -744,12 +744,12 @@ module.exports = {
                     if (user._level == 'Moderator') {
                         reputation = self.config.ubbToNbbModeratorsAddedReputation + user._rating;
                         Group.join(nbbData.groups.Moderators.gid, uid, function(){
-                            logger.info(user.username + ' became a moderator');
+                            logger.info(user.username + ' became a moderator\n\n');
                         });
                     } else if (user._level == 'Administrator') {
                         reputation = self.config.ubbToNbbModeratorsAddedReputation + user._rating;
                         Group.join(nbbData.groups.Administrators.gid, uid, function(){
-                            logger.info(user.username + ' became an Administrator');
+                            logger.info(user.username + ' became an Administrator\n\n');
                         });
                     } else {
                         reputation = user._rating || 0;
@@ -815,7 +815,7 @@ module.exports = {
 
         async.eachSeries(_categories, function(key, save) {
             var category = categories[key];
-            logger.debug('\n\n[idx:' + count++ + '] saving category: ' + category.name);
+            logger.debug('[idx:' + count++ + '] saving category: ' + category.name + '\n\n');
 
             Categories.create(category, function(err, categoryData) {
 
@@ -847,7 +847,7 @@ module.exports = {
                 var topic = topics[key];
 
                 if (!self.ubbToNbbMap.forums[topic._forumId] || !self.ubbToNbbMap.users[topic._userId]){
-                    logger.error('\n\ntopic: "' + topic._title + '" _of: ' + !!self.ubbToNbbMap.forums[topic._forumId] + ' _ou: ' + !!self.ubbToNbbMap.users[topic._userId] +   ' .. skipping');
+                    logger.error('topic: "' + topic._title + '" _of: ' + !!self.ubbToNbbMap.forums[topic._forumId] + ' _ou: ' + !!self.ubbToNbbMap.users[topic._userId] +   ' .. skipping\n\n');
                     self.ubbToNbbMap.skippedTopics.push(topic);
                     save();
                 } else {
@@ -855,7 +855,7 @@ module.exports = {
                     topic.cid = self.ubbToNbbMap.forums[topic._forumId].cid;
                     topic.uid = self.ubbToNbbMap.users[topic._userId].uid;
 
-                    logger.debug('\n\n[idx:' + count++ + '] saving topic: ' + topic.title);
+                    logger.debug('[idx:' + count++ + '] saving topic: ' + topic.title + '\n\n');
                     Topics.post(topic.uid, topic.title, topic.content, topic.cid, function(err, ret){
                         if (err) {
                             logger.debug('_of');
@@ -872,13 +872,11 @@ module.exports = {
                             Topics.setTopicField(ret.topicData.tid, 'timestamp', topic.timestamp);
                             Topics.setTopicField(ret.topicData.tid, 'viewcount', topic.viewcount);
                             Topics.setTopicField(ret.topicData.tid, 'pinned', topic.pinned);
-                            Posts.setPostField(ret.postData.pid, 'timestamp', topic.timestamp, function (){
-                                Posts.setPostField(ret.postData.pid, 'relativeTime', topic.relativeTime, function (){
-                                    self.ubbToNbbMap.savedTopics.push($.extend({}, topic, ret.topicData));
-                                    save();
-                                });
-                            });
+                            Posts.setPostField(ret.postData.pid, 'timestamp', topic.timestamp);
+                            Posts.setPostField(ret.postData.pid, 'relativeTime', topic.relativeTime);
+                            self.ubbToNbbMap.savedTopics.push($.extend({}, topic, ret.topicData));
                             self.ubbToNbbMap.topics[topic._otid] = {tid: ret.topicData.tid, redirectRule: ret.topicData.redirectRule};
+                            save();
                         }
                     });
                 }
@@ -898,35 +896,35 @@ module.exports = {
         async.eachSeries(_posts, function(key, save) {
                 var post = posts[key];
                 if (!self.ubbToNbbMap.topics[post._topicId] || !self.ubbToNbbMap.users[post._userId]) {
-                    logger.error('\n\npost: "' + post._opid + '" _ot: ' + !!self.ubbToNbbMap.topics[post._topicId] + ' _ou: ' + !!self.ubbToNbbMap.users[post._userId] +   ' .. skipping');
+                    logger.error('post: "' + post._opid + '" _ot: ' + !!self.ubbToNbbMap.topics[post._topicId] + ' _ou: ' + !!self.ubbToNbbMap.users[post._userId] +   ' .. skipping\n\n');
                     self.ubbToNbbMap.skippedPosts.push(post);
                     save();
                 } else {
                     post.tid = self.ubbToNbbMap.topics[post._topicId].tid;
                     post.uid = self.ubbToNbbMap.users[post._userId].uid;
 
-                    logger.debug('\n\n[idx: ' + key + '] saving post: ' + post._opid);
-                    Posts.create(post.uid, post.tid, post.content || '', function(err, postData){
-                        if (err) {
+                    logger.debug('[idx: ' + key + '] saving post: ' + post._opid + '\n\n');
+                      Posts.create(post.uid, post.tid, post.content || '', function(err, postData){
+                          if (err) {
 
-                            logger.error(err);
-                            logger.debug('_ot');
-                            logger.debug(self.ubbToNbbMap.topics[post._topicId]);
-                            logger.debug('_ou');
-                            logger.debug(self.ubbToNbbMap.users[topic._userId] + '\n\n');
+                              logger.error(err);
+                              logger.debug('_ot');
+                              logger.debug(self.ubbToNbbMap.topics[post._topicId]);
+                              logger.debug('_ou');
+                              logger.debug(self.ubbToNbbMap.users[topic._userId] + '\n\n');
 
 
-                            self.ubbToNbbMap.skippedPosts.push(post);
-                            save();
-                        } else {
-                            postData.redirectRule = self.redirectRule('topics/' + post._topicId + '/(.)*#Post' + post._opid, 'topic/' + post.tid + '#' + postData.pid);
+                              self.ubbToNbbMap.skippedPosts.push(post);
+                              save();
+                          } else {
+                              postData.redirectRule = self.redirectRule('topics/' + post._topicId + '/(.)*#Post' + post._opid, 'topic/' + post.tid + '#' + postData.pid);
 
-                            Posts.setPostField(postData.pid, 'timestamp', post.timestamp);
-                            Posts.setPostField(postData.pid, 'relativeTime', post.relativeTime);
-                            self.ubbToNbbMap.savedPosts.push($.extend({}, post, postData));
-                            save();
-                        }
-                    });
+                              Posts.setPostField(postData.pid, 'timestamp', post.timestamp);
+                              Posts.setPostField(postData.pid, 'relativeTime', post.relativeTime);
+                              self.ubbToNbbMap.savedPosts.push($.extend({}, post, postData));
+                              save();
+                          }
+                      });
                 }
             },
             function(){
@@ -944,16 +942,16 @@ module.exports = {
             + '* Go through all users in the saved map, each who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to your old forum avatar dir\n'
             + '* All of the posts and topics content are still in HTML, I will try to write a nbb plugin to consume those, otherwise, you would have to go through all the html content and Markdown it, why haven\'t done that here? I tried, it\'s just too much of a memory hog\n'
             + '* Make sure the old [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars working'
-            + '* Create a nodebb-theme that works with your site');
+            + '* Create a nodebb-theme that works with your site\n\n');
 
-        logger.info('\n\nForums: skipped: ' + this.ubbToNbbMap.skippedForums.length + ' - saved: ' + this.ubbToNbbMap.savedForums.length);
+        logger.info('Forums: skipped: ' + this.ubbToNbbMap.skippedForums.length + ' - saved: ' + this.ubbToNbbMap.savedForums.length);
         logger.info('Users: skipped: ' + this.ubbToNbbMap.skippedUsers.length + ' - saved: ' + this.ubbToNbbMap.savedUsers.length);
         logger.info('Topics: skipped: ' + this.ubbToNbbMap.skippedTopics.length + ' - saved: ' + this.ubbToNbbMap.savedTopics.length);
-        logger.info('Posts: skipped: ' + this.ubbToNbbMap.skippedPosts.length + ' - saved: ' + this.ubbToNbbMap.savedPosts.length);
+        logger.info('Posts: skipped: ' + this.ubbToNbbMap.skippedPosts.length + ' - saved: ' + this.ubbToNbbMap.savedPosts.length + '\n\n');
 
-        logger.info('\n\nWriting a large json map on disk here: ' + this.config.ubbToNbbMapFile + ' please be patient ... ');
+        logger.info('Writing a large json map on disk here: ' + this.config.ubbToNbbMapFile + ' please be patient ... ');
         logger.info('it will look something like this: ');
-        logger.log('{\n\t\tsavedUsers: {...},\n\t\tsavedForums: {...},\n\t\tsavedTopics: {...},\n\t\tsavedPosts: {...},\n\t\tskippedUsers: {...},\n\t\tskippedForums: {...},\n\t\tskippedTopics: {...},\n\t\tskippedPosts: {..}\n\t}');
+        logger.log('\t{\n\t\tsavedUsers: {...},\n\t\tsavedForums: {...},\n\t\tsavedTopics: {...},\n\t\tsavedPosts: {...},\n\t\tskippedUsers: {...},\n\t\tskippedForums: {...},\n\t\tskippedTopics: {...},\n\t\tskippedPosts: {..}\n\t}');
 
         this.slowWriteJSONtoFile(this.config.ubbToNbbMapFile,
             {
@@ -966,12 +964,15 @@ module.exports = {
                 skippedTopics: this.ubbToNbbMap.skippedTopics,
                 skippedPosts: this.ubbToNbbMap.skippedPosts
             },
-            next);
+            function(){
+                logger.info("DONE");
+                next();
+            });
     },
 
     redirectRule: function(from, to) {
         var res = this.config.nginx.rule.replace('${FROM}', from).replace('${TO}', to);
-        logger.info(res);
+        logger.info(res + '\n\n');
         return res;
     },
 

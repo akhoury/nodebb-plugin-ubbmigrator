@@ -1,3 +1,7 @@
+###Due to issue #2 this plugins has been rendered unusable (unless you want to hack NodeBB), hang on, i'm on it.
+
+<br />
+
 ###Don't have an official release yet; this is probably a pre-alpha version, so it's fragile. Handle with care.
 <br />
 
