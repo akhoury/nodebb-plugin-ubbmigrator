@@ -1,14 +1,71 @@
+###Don't have an official release yet; this is probably a pre-alpha verion, so it's fragile. Handle with care.
+<br />
+<br />
+
 nodebb-plugin-ubbmigrator
 =========
 
-UBB to NodeBB forum migrator, a one time use thing, you know, like a condom. This is probably a pre-alpha verion, so it's fragile, handle with care.
+UBB to NodeBB forum migrator, a one time use thing, you know, like a condom. 
+
+<br />
+
+
+### What does it migrate:
+
+read carefully: 
+
+- ####Users: 
+    * __Username__ YES. if a user have an invalid username per NodeBB rules, the migrator will try to clean it, then test again, if that's still invalid, the migrator will test the UBB.User.UserDisplayName, if that doesn't work, this user will be skipped.
+    * UBB for some reason allows duplicate users with same emails? so the first ones by ID orders will be saved, the rest will be skipped. (UBB appends [username]_dup[Number] next to the dups.. so those will be skipped too if the email is already used)
+    * __Passwords__ NO. UBB use MD5, NodeBB uses Sha1 I think, so can't do, the migrator will generate random passwords of length 13 and a set of characters (configurable), don't worry, the migrator will give out the clear text passwords in the report, so you can email them to your users, keep them safe.
+    * __Admins & Moderators__: SORT-OF. NodeBB uses repuration for moderators access, so, even though I add the admins to the NodeBB.Administrators group, and also create a group for old timers (moderators), they don't really become admins nor moderators, so what I do here, is explicitely add reputation points (NodeBB default is 1000 + UBB.User.rating (to keep the karma)) - so .. you can keep track of your moderators and admins in the nodebb/admin panel, and manually add/remove them later.
+    * __Joindate__ YES.
+    * __Website__ YES. if URL looks valid, it is migrated, but it's not checked if 404s 
+    * __Avatar__ YES. if URL looks valid, it is migrated, but it's not checked if 404s, if not valid, it's set to "" and NodeBB will generate a gravatar URl for the user, but the migrator will also add an attribute `user.customPicture = true` in the generated map if you'd like to make sure the URLs are 200s, you can iterate over them.
+    * __Reputation__ SORT-OF. assumed the UBB.User.raking (Moderators and Admins get extra points)
+    * __Location__ YES. migrated as is, clear text
+    * __Signature__ YES. migrated as is (HTML -- __read the Markdown note below__)
+    * __Banned__ YES. it will stay banned, by username
+    * __Confimartion emails__? there is an option for this migrator (look in the configs) `nbbAutoConfirmEmails = true/false` which will try to prevent the confirmation email from sending out, and will explicitly set the accounts to verified in NodeBB.
+    * __Nginx RedirectRules__ YES. per each user's profile for your convience, see the configs to find out more.
+    * __Oh and__, UBB have a weird User with ID == 1, ******DONOTDELETE****** <= that's like the first user created, and somehow, in my UBB installation, it does own few topics and posts, so these will be assigned to the NodeBB initial Admin created. 
+
+
+
+- ####Forums (AKA Categories per NodeBB Speak): 
+    * __Title__ YES
+    * __description__: YES
+    * __Order__: per FORUM_ID order, you can reorder those later
+    * __NodeBB Icon__: they all get the comment icon for noww, you can change them later
+    * __Nginx RedirectRule__ YES. per each forum's url, for your convience, see the configs to find out more.
+
+
+- ####Topics:
+    * __Within its Forum (aka Category)__ YES (but if its parent forum is skipped, this topic gets skipped)
+    * __Owned by its User__ YES (but if its user is skipped, this topic gets skipped)
+    * __Title__ YES
+    * __Content__ YES (HTML - Read the Markdown Note)
+    * __DateTime__ YES
+    * __Pinned__ YES (I don't know how many you can pin in NodeBB)
+    * __ViewCount__ YES
+    * __Nginx RedirectRule__ YES. per each forum's url, for your convience, see the configs to find out more.
+
+
+- ####Posts:
+    * __Within its Forum (aka Category)__ YES (but if its grand-parent forum is skipped, its parent topic gets skipped, hence this post gets skipped)
+    * __Within its Topic__ YES (but if its parent topic is skipped, this post gets skipped)
+    * __Owned by its User__ YES (but if its user is skipped, this post is skipped)
+    * __Content__ YES (HTML - Read the Markdown Note)
+    * __DateTime__ YES
+    * __Nginx RedirectRule__ SORT-OF, every UBB.Post URL basically points to its Parent-Topic's URL with a `ubbthreads.php/topic/123/#Post456789`, I don't think there is an easy way for for nginx to capture the # values, without some Client-Side JavaScript involved, BUT I generate the rule anyway, so you can have a mapping from the UBB posts to the NBB posts. And if you find a solution, please share. 
+
 
 ## Versions tested on:
   - UBB 7.5.7 ---> NodeBB 0.1.1
 
 ## Example usage
 #### Readme: 
-This is a not a normal plugin, at the moment there is no way you can run it from the NodeBB/admin panel, you must install it in NodeBB/node_modules/nodebb-plugin-ubbmigrator
+This is a not a normal plugin, at the moment there is no way to run it from the NodeBB/admin panel, you must install it in NodeBB/node_modules/nodebb-plugin-ubbmigrator
 ```bash
 # that's your nodebb installation
 # I should not need to ask you to try this on a staging machine or locally first
@@ -51,7 +108,10 @@ ubb.migrate({
     // re-setup my nodebb installation, basically calling node app.js --setup={...} with the configs sepcified
     // for now, the nbbReSetup only works on UNIX
     nbbReSetup: {
+        // to run the Re-Setup or not
+        // if true, the rest of configs are required
         run: true,
+        
         // WARNING !!!!!!! THIS WILL FLUSH YOUR REDIS NODEBB DATABASE !!!! 
         flushdb: true,
 
@@ -75,59 +135,19 @@ ubb.migrate({
 
     // optional, that's the ubb default, I think
     ubbTablePrefix: "ubbt_",
+    
+    nginx: {
+        // ONLY replace the 'MY_UBB_PATH' and 'MY_NBB_PATH' and leave the ${FROM} and ${TO} 
+        // as they will be replaced appropriately
+        // or i guess if you know what you're doing then modify at will
+        // example: rewrite ^/MY_UBB_PATH/users/123(.*)$ /MY_NBB_PATH/user/elvis/$1 last;
+        // this will be stdout as [info] per each record and also added to the report map.
+        // I am not an nginx expert, but this should be enough for you if you are.
+        
+        rule: " rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;"
+    }
 });
 ```
-
-### What does it migrate:
-
-read carefully: 
-
-- ####Users: 
-    * __Username__ YES. if a user have an invalid username per NodeBB rules, the migrator will try to clean it, then test again, if that's still invalid, the migrator will test the UBB UserDisplayName, if that doesn't work, this user will be skipped.
-    * UBB for some reason allows duplicate users with same emails? so the first ones by ID orders will be saved, the rest will be skipped. (UBB appends [username]_dup[Number] next to the dups.. so those will be skipped too if the email is already used)
-    * __Passwords__ NO. UBB use MD5, NodeBB uses Sha1 I think, so can't do, the migrator will generate random passwords of length 13 and a set of characters (configurable), don't worry, the migrator will give out the clear text passwords so you can emails your users, keep them safe.
-    * __Admins & Moderators__: SORT-OF. NodeBB uses repuration for moderators access, so, even though I add the admins to the NodeBB.Administrators group, and I create a group for old timers (moderators), they don't really become admins nor moderators, so what i do here, is explicitely add reputation points (NodeBB default is 1000 + UBB.User.rating (to keep the karma)) - so .. you can keep track of your moderators and admins, and manually add/remove them later.
-    * __Joindates__ YES.
-    * __Website__ YES. if URL looks valid, it is migrated, but it's not checked if 404s 
-    * __Avatar__ YES. if URL looks valid, it is migrated, but it's not checked if 404s, if not valid, it's set to "" and NodeBB will generate gravatar for the user, but I will also add an attribute `user.customPicture = true` in the generated map if you'd like to make sure the URLs are 200s
-    * __Reputation__ SORT-OF. assumed the UBB.User.raking (Moderators and Admins get extra points)
-    * __location__ YES. migrated as is, clear text
-    * __signatures__ YES. migrated as is (HTML -- __read the Markdown note below__)
-    * __banned__ YES. it will stay banned, by username
-    * __Confimartion emails__? there is an option, (look in the configs) `nbbAutoConfirmEmails = true/false` which will try to prevent the confirmation email from sending out, and will explicitly set the accounts to veified in NodeBB.
-    * __Nginx RedirectRules__ YES. per each user's profile for your convience, see the configs to find out more.
-    * oh and, UBB have a weird User with ID == 1, ******DONOTDELETE****** <= that's like the first user created, and somehow, mine does own few topics and posts, so these will be assigned to the NodeBB initial Admin id=1 too. 
-
-
-
-- ####Forums (AKA Categories per NodeBB Speak): 
-    * __Title__ YES
-    * __description__: YES
-    * __Order__: per id order, you can reorder those later
-    * __NodeBB Icon__: they all get the comment icon, you can change them later
-    * __Nginx RedirectRule__ YES. per each forum's url, for your convience, see the configs to find out more.
-
-
-- ####Topics:
-    * __Within its Forum (aka Category)__ YES (but if forum is skipped, this topic is skipped)
-    * __Owned by its User__ YES (but if the user is skipped, this topic is skipped)
-    * __Title__ YES
-    * __Content__ YES (HTML - Read the Markdown Note)
-    * __DateTime__ YES
-    * __Pinned__ YES (I don't know how mnay you can pin in NodeBB)
-    * __ViewCount__ YES
-    * __Nginx RedirectRule__ YES. per each forum's url, for your convience, see the configs to find out more.
-
-
-- ####Posts:
-    * __Within its Forum (aka Category)__ YES (but if forum is skipped, the parent topic is skipped, so this post is skipped)
-    * __Within its Topic__ YES (the parent topic is skipped, this post is skipped)
-    * __Owned by its User__ YES (but if the user is skipped, this post is skipped)
-    * __Content__ YES (HTML - Read the Markdown Note)
-    * __DateTime__ YES
-    * __Nginx RedirectRule__ YES. per each forum's url, for your convience, see the configs to find out more.
-
-
 ### Future versions support
 * Will keep supporting future NodeBB versions, since it's still very young and I'm a fan, but you need to submit an issue with all the details (NodeBB version, UBB version, issue etc..), and I will help as fast as I can.
 * Will not support multi-UBB versions, unless minor point releases, not major

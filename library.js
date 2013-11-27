@@ -229,6 +229,9 @@ module.exports = {
                 // ONLY replace the 'MY_UBB_PATH' and 'MY_NBB_PATH' and leave the ${FROM} and ${TO} as they will be replaced appropriately
                 // or i guess if you know what you're doing then modify at will
                 // example: rewrite ^/MY_UBB_PATH/users/123(.*)$ /MY_NBB_PATH/user/elvis/$1 last;
+                // this will be stdout as [info] per each record and also added to the report map.
+                // I am not an nginx expert, but this should be enough for you if you are.
+
                 rule: " rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;"
             }
 
