@@ -806,8 +806,8 @@ module.exports = {
         });
     },
 
-    // save the UBB categories to nbb's redis
-    // ubb.forums == nbb.categories
+    // save the UBB forums to nbb's redis as categories
+    // forums chez UBB are categories chez NBB
     nbbSaveCategories: function(next) {
         var self = this, count = 0;
         var categories = self.ubbToNbbMap.forums;
@@ -837,7 +837,6 @@ module.exports = {
 
     // save the UBB topics to nbb's redis
     nbbSaveTopics: function(next) {
-        // topics chez nbb are forums chez ubb
         var self = this, count = 0;
 
         var topics = self.ubbToNbbMap.topics;
