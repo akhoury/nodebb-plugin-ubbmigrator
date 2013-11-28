@@ -16,3 +16,5 @@ node_modules
 .idea
 *.sql
 tmp
+.nbb.config.json
+!ubb_tiny.sql

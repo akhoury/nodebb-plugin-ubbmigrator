@@ -169,6 +169,10 @@ module.exports = m = {
 
                     // where to save memory files
                     mem: {
+                        users: './tmp/users.json',
+                        forums: './tmp/forums.json',
+                        topics: './tmp/topics.json',
+                        posts: './tmp/posts.json',
                         file: './tmp/mem.json'
                     }
                 }
@@ -233,8 +237,9 @@ module.exports = m = {
                     },
 
                     // to be randomly selected from migrating the ubb.forums
-                    categoriesColorClasses: ['category-darkblue', 'category-blue', 'category-purple'],
-                    categoriesIcons: ['icon-comment'],
+                    categoriesTextColors: ['#FFFFFF'],
+                    categoriesBgColors: ['#ab1290','#004c66','#0059b2'],
+                    categoriesIcons: ['fa-comment'],
 
                     // this will set the nodebb 'email:*:confirm' records to true
                     // and will del all the 'confirm:*KEYS*:emails' too
@@ -303,8 +308,12 @@ module.exports = m = {
             m.ubb.connection.connect();
 
             if (m.nbb.config.resetup.run || !fs.existsSync(m.common.config.mem.file)) {
+                fs.createFileSync(m.common.config.mem.users);
+                fs.createFileSync(m.common.config.mem.forums);
+                fs.createFileSync(m.common.config.mem.topics);
+                fs.createFileSync(m.common.config.mem.posts);
                 fs.createFileSync(m.common.config.mem.file);
-                m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem, next);
+                m.common.slowWriteJSONtoFile(m.common.config.mem.file, {}, next);
             }
         },
 
@@ -312,37 +321,32 @@ module.exports = m = {
 
         report: function(next) {
 
-            logger.log('Writing a large json map on disk here: ' + m.common.config.mem.file + ' please be patient ... ');
-            logger.log('it will look something like this: ');
-            logger.log('\t{\n'
-                + '\n\t\tusers: {\n\t\t\tnormalized: {...},\n\t\t\tmigrated: {...},\n\t\t\tskipped: {...}\n\t\t},'
-                + '\n\t\tforums: {\n\t\t\tnormalized: {...},\n\t\t\tmigrated: {...},\n\t\t\tskipped: {...}\n\t\t},'
-                + '\n\t\ttopics: {\n\t\t\tnormalized: {...},\n\t\t\tmigrated: {...},\n\t\t\tskipped: {...}\n\t\t},'
-                + '\n\t\tposts: {\n\t\t\tnormalized: {...},\n\t\t\tmigrated: {...},\n\t\t\tskipped: {...}\n\t\t}'
-                + '\n\t}');
+            logger.log('Look for these files for the maps: ');
+            logger.log('They\'ll look something like this: (all the attributes that starts with \'_\' are the old ones)');
+            logger.log(m.common.config.mem.users);
+            logger.log('\t{\n' + '\n\t\tnormalized: null,\n\t\tmigrated: {...},\n\t\tskipped: {...}\n\t}');
+            logger.log(m.common.config.mem.forums);
+            logger.log('\t{\n' + '\n\t\tnormalized: null,\n\t\tmigrated: {...},\n\t\tskipped: {...}\n\t}');
+            logger.log(m.common.config.mem.topics);
+            logger.log('\t{\n' + '\n\t\tnormalized: null,\n\t\tmigrated: {...},\n\t\tskipped: {...}\n\t}');
+            logger.log(m.common.config.mem.posts);
+            logger.log('\t{\n' + '\n\t\tnormalized: null,\n\t\tmigrated: {...},\n\t\tskipped: {...}\n\t}');
 
             logger.log('\n\n======================MIGRATION REPORT==================\n');
-
             logger.log('Users: skipped: ' + Object.keys(m.mem.users.skipped).length + ' - migrated: ' + Object.keys(m.mem.users.migrated).length);
             logger.log('Forums: skipped: ' + Object.keys(m.mem.forums.skipped).length + ' - migrated: ' + Object.keys(m.mem.forums.migrated).length);
             logger.log('Topics: skipped: ' + Object.keys(m.mem.topics.skipped).length + ' - migrated: ' + Object.keys(m.mem.topics.migrated).length);
             logger.log('Posts: skipped: ' + Object.keys(m.mem.posts.skipped).length + ' - migrated: ' + Object.keys(m.mem.posts.migrated).length + '\n\n');
 
             logger.log('====  REMEMBER TO:\n'
-                + '\n\t*-) Email all your users their new passwords, find them in the map file reported below.'
-                + '\n\t*-) Go through all users in the saved map, each who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to your old forum avatar dir'
-                +  (m.common.config.markdown ? '' : '\n\t*-) All of the posts and topics content are still in HTML, I will try to write a nbb plugin to consume those, otherwise, you would have to go through all the html content and Markdown it.')
-                + '\n\t*-) Make sure the old [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars working'
-                + '\n\t*-) Create a nodebb-theme that works with your site\n');
+                + '\n\t*-) Email all your users their new passwords, find them in the map file reported few lines up.'
+                + '\n\t*-) Go through all users in the saved users map, each who has user.customPicture == true, test the image url if 200 or not, also filter the ones pointing to your old forum avatar dir, or keep that dir ([YOUR_UBB_PATH]/images/avatars/*) path working, your call'
+                +  (m.common.config.markdown ? '' : '\n\t*-) All of the posts and topics content are still in HTML, I will try to write a nbb plugin to consume those, otherwise, you would have to go through all the html content and Markdown it on your own.')
+                + '\n\t*-) Create a nodebb-theme that works with your site\n'
+                + '\n\t*-) I may write a NodeBB plugin to enforce one time use of temp passwords, if you beat me to it, let me know\n');
 
-            // ,\n\t\tsavedForums: {...},\n\t\tsavedTopics: {...},\n\t\tsavedPosts: {...},\n\t\tskippedUsers: {...},\n\t\tskippedForums: {...},\n\t\tskippedTopics: {...},\n\t\tskippedPosts: {..}\n\t}');
-
-            m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem,
-                function(){
-                    logger.info("DONE");
-                    logger.info("Find that json here =====> " + m.common.config.mem.file );
-                    next();
-                });
+            logger.info("DONE");
+            next();
         },
 
         redirectRule: function(from, to) {
@@ -675,7 +679,8 @@ module.exports = m = {
 
                     // set some defaults since i don't have them
                     forum.icon = m.nbb.config.categoriesIcons[Math.floor(Math.random() * m.nbb.config.categoriesIcons.length)];
-                    forum.blockclass = m.nbb.config.categoriesColorClasses[Math.floor(Math.random() * m.nbb.config.categoriesColorClasses.length)];
+                    forum.bgColor = m.nbb.config.categoriesBgColors[Math.floor(Math.random() * m.nbb.config.categoriesBgColors.length)];
+                    forum.color = m.nbb.config.categoriesTextColors[Math.floor(Math.random() * m.nbb.config.categoriesTextColors.length)];
 
                     // order based on index i guess
                     forum.order = fi + 1;
@@ -901,7 +906,7 @@ module.exports = m = {
         },
 
         reloadMem: function(next){
-            m.mem = require(m.common.config.mem.file);
+            // reload somehow
             next();
         },
 
@@ -923,19 +928,22 @@ module.exports = m = {
             Group.getGidFromName('Administrators', function(err, gid) {
                 // save a reference for the admins gid
                 m.nbb.config.groups.administrators.gid = gid;
+
                 // create an moderators group from the users who are ubb Moderators
-                Group.create(m.nbb.config.moderatorsLikeGroupName, m.nbb.config.moderatorsLikeGroupDescription, function(err, group) {
+                Group.create(m.nbb.config.moderatorsLikeGroupName, m.nbb.config.moderatorsLikeGroupDescription, function(err, groupData) {
                     if (err) {
                         if (err.message == 'group-exists') {
-                            Group.getGidFromName(m.nbb.config.moderatorsLikeGroupName, function(err, gid){
+                            Group.getGidFromName(m.nbb.config.moderatorsLikeGroupName, function(err, mgid){
                                 // save a reference to the gid to use it when needed, bro
-                                m.nbb.config.groups.moderators.gid = gid;
+                                m.nbb.config.groups.moderators.gid = mgid;
                                 m.nbb.backupConfig(next);
                             });
                         }
                     } else {
+
+                        console.log(groupData);
                         // save a reference to the gid to use it when needed, bro
-                        m.nbb.config.groups.moderators.gid = gid;
+                        m.nbb.config.groups.moderators.gid = groupData.gid;
                         m.nbb.backupConfig(next);
                     }
                 });
@@ -996,7 +1004,13 @@ module.exports = m = {
         // save the UBB users to nbb's redis
         setUsers: function(next) {
             var count = 0;
-            if (!m.mem.users.normalized) {next(); return;}
+            if (!m.mem.users || !m.mem.users.normalized) {
+                m.mem.users = require(m.common.config.mem.users);
+                next();
+                return;
+            }
+
+            logger.debug("Administrator gid: " + m.nbb.config.groups.administrators.gid + " Moderators gid: " + m.nbb.config.groups.moderators.gid);
 
             var users = m.mem.users.normalized;
             var _users = Object.keys(users);
@@ -1063,15 +1077,19 @@ module.exports = m = {
 
                         _u_.redirectRule = m.common.redirectRule('users/' + user._ouid + '/' + user._username + '/', 'user/' + user.userslug);
 
-                        User.setUserFields(uid, _u_);
-                        _u_.uid = uid;
+                        User.setUserFields(uid, _u_, function(){
+                            _u_.uid = uid;
 
-                        m.mem.users.migrated[user._ouid] = $.extend({}, user, _u_);
-                        if (m.nbb.config.autoConfirmEmails)
-                            RDB.set('email:' + user.email + ':confirm', true);
+                            m.mem.users.migrated[user._ouid] = $.extend({}, user, _u_);
+                            delete m.mem.users.normalized[user._ouid];
 
-                        delete m.mem.users.normalized[user._ouid];
-                        done();
+                            if (m.nbb.config.autoConfirmEmails)
+                                RDB.set('email:' + user.email + ':confirm', true, function(){
+                                    done();
+                                });
+                            else
+                                done();
+                        });
                     }
                 });
             }, function(){
@@ -1081,8 +1099,8 @@ module.exports = m = {
                     uid: 1
                 };
 
-                delete m.mem.users.normalized;
-                m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem, function(){
+                m.mem.users.normalized = null;
+                m.common.slowWriteJSONtoFile(m.common.config.mem.users, m.mem.users, function(){
 
                     if (m.nbb.config.autoConfirmEmails) {
                         RDB.keys('confirm:*:email', function(err, keys){
@@ -1103,7 +1121,11 @@ module.exports = m = {
         setForums: function(next) {
             var count = 0;
 
-            if (!m.mem.forums.normalized) {next(); return;}
+            if (!m.mem.forums || !m.mem.forums.normalized) {
+                m.mem.forums = require(m.common.config.mem.forums);
+                next();
+                return;
+            }
 
             var forums = m.mem.forums.normalized;
             var _forums = Object.keys(forums);
@@ -1127,8 +1149,8 @@ module.exports = m = {
                 });
             }, function(){
 
-                delete m.mem.forums.normalized;
-                m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem, next);
+                m.mem.forums.normalized = null;
+                m.common.slowWriteJSONtoFile(m.common.config.mem.forums, m.mem.forums, next);
             });
         },
 
@@ -1136,7 +1158,11 @@ module.exports = m = {
         setTopics: function(next) {
             var count = 0;
 
-            if (!m.mem.topics.normalized) {next(); return;}
+            if (!m.mem.topics || !m.mem.topics.normalized) {
+                m.mem.topics = require(m.common.config.mem.topics);
+                next();
+                return;
+            }
 
             var topics = m.mem.topics.normalized;
             var _topics = Object.keys(topics);
@@ -1183,8 +1209,8 @@ module.exports = m = {
                     });
                 }
             }, function(){
-                delete m.mem.topics.normalized;
-                m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem, next);
+                m.mem.topics.normalized = null;
+                m.common.slowWriteJSONtoFile(m.common.config.mem.topics, m.mem.topics, next);
             });
         },
 
@@ -1192,7 +1218,11 @@ module.exports = m = {
         setPosts: function(next) {
             var count = 0;
 
-            if (!m.mem.posts.normalized) {next(); return;}
+            if (!m.mem.posts || !m.mem.posts.normalized) {
+                m.mem.posts = require(m.common.config.mem.posts);
+                next();
+                return;
+            }
 
             var posts = m.mem.posts.normalized;
             var _posts = Object.keys(posts);
@@ -1233,8 +1263,8 @@ module.exports = m = {
                     });
                 }
             }, function(){
-                delete m.mem.posts.normalized;
-                m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem, next);
+                m.mem.posts.normalized = null;
+                m.common.slowWriteJSONtoFile(m.common.config.mem.posts, m.mem.posts, next);
             });
         }
     }

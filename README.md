@@ -1,4 +1,4 @@
-###Due to [issue #2](https://github.com/akhoury/nodebb-plugin-ubbmigrator/issues/2) this plugin has been rendered unusable (unless you want to hack NodeBB), but we're on it.
+###No official release yet, this is a pre-alfa version. Not yet well tested for Large Forums, but will be soon.
 
 <br />
 
@@ -155,7 +155,13 @@ ubb.migrate({
 
 ### Markdown Note
 
-NodeBB uses Markdown for the user submitted content, UBB uses HTML, so, I tried to use an html-to-markdown converter, but it was a huge memory hog, was hitting segmentation faults and memory limits beyong 18k posts conversion, so I took it out, for the record I used `html-md`. Having that said, you still need to convert that content to Markdown somehow, but I'll let you do that. Or you can wait for me to write a NodeBB client-side plugin that will understand html content or something.. or write your own, or submit another solution, I'm open for that, till then, expect to see html tags in the migrated post-contents and user signatures.
+NodeBB uses Markdown for the user submitted content, UBB uses HTML, so,
+I tried to use an html-to-markdown converter, but it was a huge memory hog,
+was hitting segmentation faults and memory limits beyond 18k posts conversion,
+so I disbaled it, for the record I am using `html-md`. You can still enable it by setting `{ commom: { ..., markdown: true, ... } ... }` in the config.
+Having that said, if you leave it disabled, you still need to convert that content to Markdown somehow,
+but I'll let you do that. Or you can wait for me to write a NodeBB client-side plugin that will understands html content or something..
+or write your own, or submit another solution, I'm open for that, till then, expect to see html tags in the migrated post-contents and user signatures, if the markdown is disabled.
 
 
     

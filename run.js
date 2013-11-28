@@ -5,7 +5,7 @@ migrator.common.migrate({
     // common configs
     common: {
 
-        log: 'info,warn,error,debug', // or just 'debug' to spam the log
+        log: 'debug', // or just 'info,warn,error' to spam the log
 
         // generate passwords for the users, yea
         passwordGen: {
@@ -27,8 +27,16 @@ migrator.common.migrate({
 
         // if enabled, this is a memory hog,
         // YOU WILL HIT MEMORY limits for large forums (5k+ each users, topics, posts - that depends on your machine but you know what i mean)
-        //
-        markdown: false
+        markdown: false,
+
+
+        mem: {
+            users: './tmp/users.json',
+            forums: './tmp/forums.json',
+            topics: './tmp/topics.json',
+            posts: './tmp/posts.json',
+            file: './tmp/mem.json'
+        }
     },
 
     // ubb specific configs
@@ -57,22 +65,26 @@ migrator.common.migrate({
         tablePrefix: 'ubbt_',
 
         // Limit ubb queries to certain time frames
-        // timestamp in SECONDS
+        // timestamp in SECONDS, that's what UBB uses
         timeMachine: {
             users: {
                 before: null, //1049942244,
+                // todo, after doesn't work yet
                 after: null
             },
             forums: {
                 before: null, //1049942244,
+                // todo, after doesn't work yet
                 after: null
             },
             topics: {
                 before: null, // 1049942244,
+                // todo, after doesn't work yet
                 after: null
             },
             posts: {
                 before: null, // 1049942244,
+                // todo, after doesn't work yet
                 after: null
             }
         }
@@ -81,9 +93,9 @@ migrator.common.migrate({
     nbb: {
         resetup: {
             // to run: node app --setup={...} with setupVal below
-            run: true,
             // !!!! IMPORTANT !!! THIS WILL FLUSH YOUR NodeBB Redis Database
-            flushdb: true,
+            run: true,
+
             // the stringified object to be passed to --setup
             setupVal:  {
                 'admin:username': 'admin',
@@ -103,8 +115,9 @@ migrator.common.migrate({
         },
 
         // to be randomly selected from migrating the ubb.forums
-        categoriesColorClasses: ['category-darkblue', 'category-blue', 'category-purple'],
-        categoriesIcons: ['icon-comment'],
+        categoriesTextColors: ['#FFFFFF'],
+        categoriesBgColors: ['#ab1290','#004c66','#0059b2'],
+        categoriesIcons: ['fa-comment'],
 
         // this will set the nodebb 'email:*:confirm' records to true
         // and will del all the 'confirm:*KEYS*:emails' too
