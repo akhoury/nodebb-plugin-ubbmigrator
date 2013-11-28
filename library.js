@@ -49,27 +49,27 @@ try {
 
 var
 
-    // nodebb utils, useful
+// nodebb utils, useful
     utils = require('../../public/src/utils.js'),
 
-    // some useful modules
+// some useful modules
 
-    // mysql to talk to ubb db
+// mysql to talk to ubb db
     mysql = require('mysql'),
 
-    // exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
-    // todo: too fucking slow ! and a memory hog !!
+// exactly what it means, ubb uses html for some posts, nbb uses markdown, right?
+// todo: too fucking slow ! and a memory hog !!
     htmlToMarkdown = require('html-md'),
 
-    // I'm lazy
+// I'm lazy
     $ = require('jquery'),
     async = require('async'),
     fs = require('fs.extra'),
     http = require('http'),
 
-    // a quick logger
+// a quick logger
     Logger = require('./logger.js'),
-    // later to be initialized with config in init()
+// later to be initialized with config in init()
     logger, m;
 
 module.exports = m = {
@@ -83,32 +83,16 @@ module.exports = m = {
                     console.log("comon.init()");
                     m.common.init(config, next);
                 },
-                function(next) {
-                    if (m.nbb.config.resetup && m.nbb.config.resetup.run) {
-                        m.nbb.resetup(next);
-                    } else {
-                        next();
-                    }
-                },
                 function(next){
                     logger.debug('common.setup()');
                     m.common.setup(next);
                 },
-                function(next){
-                    logger.debug('nbb.backupConfig()');
-                    m.nbb.backupConfig(next);
-                },
-                function(next){
-                    logger.debug('nbb.setTmpConfig()');
-                    m.nbb.setTmpConfig(next);
-                },
-                function(next){
-                    logger.debug('nbb.clearDefaultCategories()');
-                    m.nbb.clearDefaultCategories(next);
-                },
-                function(next){
-                    logger.debug('nbb.setupGroups()');
-                    m.nbb.setupGroups(next);
+                function(next) {
+                    if (m.nbb.config.resetup && m.nbb.config.resetup.run) {
+                        m.nbb.resetup(next);
+                    } else {
+                        m.nbb.reloadMem(next);
+                    }
                 },
                 function (next) {
                     logger.debug('ubb.getUsers()');
@@ -185,7 +169,7 @@ module.exports = m = {
 
                     // where to save memory files
                     mem: {
-                        file: '../tmp/mem.json'
+                        file: './tmp/mem.json'
                     }
                 }
                 , config.common);
@@ -318,8 +302,10 @@ module.exports = m = {
             m.ubb.connection = mysql.createConnection(m.ubb.config.db);
             m.ubb.connection.connect();
 
-            fs.createFileSync(m.common.config.mem.file);
-            next();
+            if (m.nbb.config.resetup.run || !fs.existsSync(m.common.config.mem.file)) {
+                fs.createFileSync(m.common.config.mem.file);
+                m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem, next);
+            }
         },
 
         // helpers
@@ -343,13 +329,13 @@ module.exports = m = {
             logger.log('Posts: skipped: ' + Object.keys(m.mem.posts.skipped).length + ' - migrated: ' + Object.keys(m.mem.posts.migrated).length + '\n\n');
 
             logger.log('====  REMEMBER TO:\n'
-                    + '\n\t*-) Email all your users their new passwords, find them in the map file reported below.'
-                    + '\n\t*-) Go through all users in the saved map, each who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to your old forum avatar dir'
-                    +  (m.common.config.markdown ? '' : '\n\t*-) All of the posts and topics content are still in HTML, I will try to write a nbb plugin to consume those, otherwise, you would have to go through all the html content and Markdown it.')
-                    + '\n\t*-) Make sure the old [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars working'
-                    + '\n\t*-) Create a nodebb-theme that works with your site\n');
+                + '\n\t*-) Email all your users their new passwords, find them in the map file reported below.'
+                + '\n\t*-) Go through all users in the saved map, each who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to your old forum avatar dir'
+                +  (m.common.config.markdown ? '' : '\n\t*-) All of the posts and topics content are still in HTML, I will try to write a nbb plugin to consume those, otherwise, you would have to go through all the html content and Markdown it.')
+                + '\n\t*-) Make sure the old [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars working'
+                + '\n\t*-) Create a nodebb-theme that works with your site\n');
 
-                // ,\n\t\tsavedForums: {...},\n\t\tsavedTopics: {...},\n\t\tsavedPosts: {...},\n\t\tskippedUsers: {...},\n\t\tskippedForums: {...},\n\t\tskippedTopics: {...},\n\t\tskippedPosts: {..}\n\t}');
+            // ,\n\t\tsavedForums: {...},\n\t\tsavedTopics: {...},\n\t\tsavedPosts: {...},\n\t\tskippedUsers: {...},\n\t\tskippedForums: {...},\n\t\tskippedTopics: {...},\n\t\tskippedPosts: {..}\n\t}');
 
             m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem,
                 function(){
@@ -581,14 +567,16 @@ module.exports = m = {
 
                     + (m.ubb.config.timeMachine.users.before ?
                     'AND ' + prefix + 'USERS.USER_REGISTERED_ON < ' + m.ubb.config.timeMachine.users.before : '');
+            if (m.mem.users.normalized)
+                m.ubb.query(query, function(err, rows) {
+                    if (err) throw err;
 
-            m.ubb.query(query, function(err, rows) {
-                if (err) throw err;
-
-                logger.info('Users query came back with ' + rows.length + ' records, now preparing, please be patient.');
-                m.mem.users.normalized = m.ubb._normalizeUsers(rows);
+                    logger.info('Users query came back with ' + rows.length + ' records, now preparing, please be patient.');
+                    m.mem.users.normalized = m.ubb._normalizeUsers(rows);
+                    next();
+                });
+            else
                 next();
-            });
         },
 
         _normalizeUsers: function(users) {
@@ -665,14 +653,17 @@ module.exports = m = {
                     + (m.ubb.config.timeMachine.forums.before ?
                     'WHERE ' + prefix + 'FORUMS.FORUM_CREATED_ON < ' + m.ubb.config.timeMachine.forums.before : '');
 
-            m.ubb.query(query,
-                function(err, rows){
-                    if (err) throw err;
+            if (m.mem.forums.normalized)
+                m.ubb.query(query,
+                    function(err, rows){
+                        if (err) throw err;
 
-                    logger.info('Forums query came back with ' + rows.length + ' records, now preparing, please be patient.');
-                    m.mem.forums.normalized = m.ubb._normalizeForums(rows);
-                    next();
-                });
+                        logger.info('Forums query came back with ' + rows.length + ' records, now preparing, please be patient.');
+                        m.mem.forums.normalized = m.ubb._normalizeForums(rows);
+                        next();
+                    });
+            else
+                next();
         },
 
         // ubb.forums == nbb.categories
@@ -739,14 +730,17 @@ module.exports = m = {
                         + (m.ubb.config.timeMachine.topics.before ?
                         'AND ' + prefix + 'TOPICS.TOPIC_CREATED_TIME < ' + m.ubb.config.timeMachine.topics.before : '');
 
-            m.ubb.query(query,
-                function(err, rows) {
-                    if (err) throw err;
+            if (m.mem.topics.normalized)
+                m.ubb.query(query,
+                    function(err, rows) {
+                        if (err) throw err;
 
-                    logger.info('Topics query came back with ' + rows.length + ' records, now preparing, please be patient.');
-                    m.mem.topics.normalized = m.ubb._normalizeTopics(rows);
-                    next();
-                });
+                        logger.info('Topics query came back with ' + rows.length + ' records, now preparing, please be patient.');
+                        m.mem.topics.normalized = m.ubb._normalizeTopics(rows);
+                        next();
+                    });
+            else
+                next();
         },
 
         // ubb.forums == nbb.categories
@@ -805,13 +799,16 @@ module.exports = m = {
                         + (m.ubb.config.timeMachine.posts.before ?
                         'AND POST_POSTED_TIME < ' + m.ubb.config.timeMachine.posts.before : '');
 
-            m.ubb.query(query, function(err, rows) {
-                if (err) throw err;
+            if (m.mem.posts.normalized)
+                m.ubb.query(query, function(err, rows) {
+                    if (err) throw err;
 
-                logger.info('Posts query came back with ' + rows.length + ' records, now preparing, please be patient.');
-                m.mem.posts.normalized = m.ubb._ubbNormalizePosts(rows);
+                    logger.info('Posts query came back with ' + rows.length + ' records, now preparing, please be patient.');
+                    m.mem.posts.normalized = m.ubb._ubbNormalizePosts(rows);
+                    next();
+                });
+            else
                 next();
-            });
         },
 
         _ubbNormalizePosts: function(posts) {
@@ -864,7 +861,7 @@ module.exports = m = {
     nbb: {
         resetup: function(next){
             var execSync = require('exec-sync')
-                , setupVal = JSON.stringify(m.nbb.config.resetup.setupVal)
+                , setupVal = JSON.stringify(m.nbb.config.resetup.setupVal).replace(/"/g, '\\"')
                 , node, result, command;
 
             var setup = function(){
@@ -877,7 +874,7 @@ module.exports = m = {
                     logger.debug('node lives here: ' + node);
 
                     // assuming we're in nodebb/node_modules/nodebb-plugin-ubbmigrator
-                    command = node + ' ../../app.js --setup=\'' + setupVal + '\'';
+                    command = node + ' ' + __dirname + '/../../app.js --setup="' + setupVal + '"';
                     logger.info('Calling this command on your behalf: \n' + command + '\n\n');
                     result = execSync(command, true);
 
@@ -889,26 +886,26 @@ module.exports = m = {
                 }
                 if (result.stdout.indexOf('NodeBB Setup Completed') > -1) {
                     logger.info('\n\nNodeBB re-setup completed.');
-                    next();
+                    m.nbb.clearDefaultCategories(next);
                 } else {
-                    logger.error(result);
+                    logger.error(JSON.stringify(result));
                     throw new Error('NodeBB automated setup didn\'t go too well. ');
                 }
             };
 
-            if (m.nbb.config.resetup.flushdb) {
-                RDB.flushdb(function(err, res){
-                    if (err) throw err;
-                    logger.info('flushdb done. ' + res);
-                    setup();
-                });
-            } else {
+            RDB.flushdb(function(err, res){
+                if (err) throw err;
+                logger.info('flushdb done. ' + res);
                 setup();
-            }
+            });
         },
 
+        reloadMem: function(next){
+            m.mem = require(m.common.config.mem.file);
+            next();
+        },
 
-        clearDefaultCategories: function(next){
+        clearDefaultCategories: function(next) {
 
             // deleting the first 12 default categories by nbb
             RDB.keys('category:*', function(err, arr) {
@@ -916,7 +913,7 @@ module.exports = m = {
                     RDB.del(k);
                 });
                 RDB.del('categories:cid', function(){
-                    next();
+                    m.nbb.setupGroups(next);
                 });
             });
         },
@@ -933,13 +930,13 @@ module.exports = m = {
                             Group.getGidFromName(m.nbb.config.moderatorsLikeGroupName, function(err, gid){
                                 // save a reference to the gid to use it when needed, bro
                                 m.nbb.config.groups.moderators.gid = gid;
-                                next();
+                                m.nbb.backupConfig(next);
                             });
                         }
                     } else {
                         // save a reference to the gid to use it when needed, bro
                         m.nbb.config.groups.moderators.gid = gid;
-                        next();
+                        m.nbb.backupConfig(next);
                     }
                 });
 
@@ -947,10 +944,12 @@ module.exports = m = {
         },
 
         backupConfig: function(next){
-            RDB.hgetall('config', function(err, data){
+            RDB.hgetall('config', function(err, data) {
                 if (err) throw err;
                 m.nbb.config.backedConfig = data || {};
-                next();
+                m.common.slowWriteJSONtoFile('./.nbb.config.json', m.nbb.config, function(){
+                    m.nbb.setTmpConfig(next);
+                });
             });
         },
 
@@ -980,7 +979,8 @@ module.exports = m = {
         },
 
         // im nice
-        restoreConfig: function(next){
+        restoreConfig: function(next) {
+            m.nbb.config = require('./.nbb.config.json');
             RDB.hmset('config', m.nbb.config.backedConfig, function(err){
                 if (err) {
                     logger.error('Something went wrong while restoring your nbb configs');
@@ -996,6 +996,7 @@ module.exports = m = {
         // save the UBB users to nbb's redis
         setUsers: function(next) {
             var count = 0;
+            if (!m.mem.users.normalized) {next(); return;}
 
             var users = m.mem.users.normalized;
             var _users = Object.keys(users);
@@ -1025,7 +1026,7 @@ module.exports = m = {
                         if (user._level == 'Moderator') {
                             reputation = m.nbb.config.moderatorAddedReputation + user._rating;
                             Group.join(m.nbb.config.groups.moderators.gid, uid, function(){
-                                logger.info(user.username + ' became a moderator');
+                                logger.info(user.username + ' became a Moderator');
                             });
                         } else if (user._level == 'Administrator') {
                             reputation = m.nbb.config.adminAddedReputation + user._rating;
@@ -1080,16 +1081,20 @@ module.exports = m = {
                     uid: 1
                 };
 
-                if (m.nbb.config.autoConfirmEmails) {
-                    RDB.keys('confirm:*:email', function(err, keys){
-                        keys.forEach(function(key){
-                            RDB.del(key);
+                delete m.mem.users.normalized;
+                m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem, function(){
+
+                    if (m.nbb.config.autoConfirmEmails) {
+                        RDB.keys('confirm:*:email', function(err, keys){
+                            keys.forEach(function(key){
+                                RDB.del(key);
+                            });
+                            next();
                         });
+                    } else {
                         next();
-                    });
-                } else {
-                    next();
-                }
+                    }
+                });
             });
         },
 
@@ -1097,6 +1102,9 @@ module.exports = m = {
         // forums chez UBB are categories chez NBB
         setForums: function(next) {
             var count = 0;
+
+            if (!m.mem.forums.normalized) {next(); return;}
+
             var forums = m.mem.forums.normalized;
             var _forums = Object.keys(forums);
 
@@ -1117,12 +1125,18 @@ module.exports = m = {
                         done();
                     }
                 });
-            }, next);
+            }, function(){
+
+                delete m.mem.forums.normalized;
+                m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem, next);
+            });
         },
 
         // save the UBB topics to nbb's redis
         setTopics: function(next) {
             var count = 0;
+
+            if (!m.mem.topics.normalized) {next(); return;}
 
             var topics = m.mem.topics.normalized;
             var _topics = Object.keys(topics);
@@ -1168,12 +1182,18 @@ module.exports = m = {
                         }
                     });
                 }
-            }, next);
+            }, function(){
+                delete m.mem.topics.normalized;
+                m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem, next);
+            });
         },
 
         // save the UBB posts to nbb's redis
         setPosts: function(next) {
             var count = 0;
+
+            if (!m.mem.posts.normalized) {next(); return;}
+
             var posts = m.mem.posts.normalized;
             var _posts = Object.keys(posts);
 
@@ -1212,7 +1232,10 @@ module.exports = m = {
                         }
                     });
                 }
-            }, next);
+            }, function(){
+                delete m.mem.posts.normalized;
+                m.common.slowWriteJSONtoFile(m.common.config.mem.file, m.mem, next);
+            });
         }
     }
 };

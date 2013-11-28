@@ -22,7 +22,7 @@ migrator.common.migrate({
             // this will be stdout as [info] per each record and also added to the report map.
             // I am not an nginx expert, but this should be enough for you if you are.
 
-            rule: ' rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;'
+            rule: 'rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;'
         },
 
         // if enabled, this is a memory hog,
