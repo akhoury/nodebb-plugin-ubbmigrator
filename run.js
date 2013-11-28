@@ -1,12 +1,11 @@
 var migrator = require('./library.js');
 
-console.log(migrator) ;
-
 migrator.common.migrate({
 
     // common configs
     common: {
-        log: 'info,warn,error', // or just 'debug' to spam the log
+
+        log: 'info,warn,error,debug', // or just 'debug' to spam the log
 
         // generate passwords for the users, yea
         passwordGen: {
@@ -26,14 +25,10 @@ migrator.common.migrate({
             rule: ' rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;'
         },
 
-        // where to save temporary memory files
-        mem: {
-            users: '../tmp/users.json',
-            forums: '../tmp/forums.json',
-            topics: '../tmp/topics.json',
-            posts: '../tmp/posts.json',
-            file: '../tmp/mem.json'
-        }
+        // if enabled, this is a memory hog,
+        // YOU WILL HIT MEMORY limits for large forums (5k+ each users, topics, posts - that depends on your machine but you know what i mean)
+        //
+        markdown: false
     },
 
     // ubb specific configs
@@ -65,19 +60,19 @@ migrator.common.migrate({
         // timestamp in SECONDS
         timeMachine: {
             users: {
-                before: 1049942244,
+                before: null, //1049942244,
                 after: null
             },
             forums: {
-                before: 1049942244,
+                before: null, //1049942244,
                 after: null
             },
             topics: {
-                before: 1049942244,
+                before: null, // 1049942244,
                 after: null
             },
             posts: {
-                before: 1049942244,
+                before: null, // 1049942244,
                 after: null
             }
         }
