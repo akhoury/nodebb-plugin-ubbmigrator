@@ -99,14 +99,6 @@ migrator.common.migrate({
 
         log: 'debug', // or just 'info,warn,error' to spam the log
 
-        // generate passwords for the users, yea
-        passwordGen: {
-            // chars selection menu
-            chars: '!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890',
-            // password length
-            len: 13
-        },
-
         nginx: {
             // ONLY replace the 'MY_UBB_PATH' and 'MY_NBB_PATH' and leave the ${FROM} and ${TO} as they will be replaced appropriately
             // or i guess if you know what you're doing then modify at will
@@ -121,14 +113,6 @@ migrator.common.migrate({
         // YOU WILL HIT MEMORY limits for large forums (5k+ each users, topics, posts - that depends on your machine but you know what i mean)
         markdown: false,
 
-
-        mem: {
-            users: './tmp/users.json',
-            forums: './tmp/forums.json',
-            topics: './tmp/topics.json',
-            posts: './tmp/posts.json',
-            file: './tmp/mem.json'
-        }
     },
 
     // ubb specific configs
@@ -141,45 +125,8 @@ migrator.common.migrate({
             database: 'ubb_test'
         },
 
-        // ubb_tiny live Db with mock data
-        // doesn't have anything worth stealing, don't waste your time
-        // also abusing it will only block access to it for a little while.
-        // oh if you want to set it locally just install mysql
-        // then mysql -uyourusername -hyourhost yourdatabasename -pyourpassword < ubb_tiny.sql
-//        db: {
-//            host: 'us-cdbr-east-04.cleardb.com',
-//            user: 'bab20eb2cf65fe',
-//            password: '8d1a480e',
-//            database: 'heroku_5c1b73282d8a005'
-//        },
-
         // ubb default, I think
         tablePrefix: 'ubbt_',
-
-        // Limit ubb queries to certain time frames
-        // timestamp in SECONDS, that's what UBB uses
-        timeMachine: {
-            users: {
-                before: null, //1049942244,
-                // todo, after doesn't work yet
-                after: null
-            },
-            forums: {
-                before: null, //1049942244,
-                // todo, after doesn't work yet
-                after: null
-            },
-            topics: {
-                before: null, // 1049942244,
-                // todo, after doesn't work yet
-                after: null
-            },
-            posts: {
-                before: null, // 1049942244,
-                // todo, after doesn't work yet
-                after: null
-            }
-        }
     },
 
     nbb: {
@@ -205,11 +152,6 @@ migrator.common.migrate({
                 'secret': ''
             }
         },
-
-        // to be randomly selected from migrating the ubb.forums
-        categoriesTextColors: ['#FFFFFF'],
-        categoriesBgColors: ['#ab1290','#004c66','#0059b2'],
-        categoriesIcons: ['fa-comment'],
 
         // this will set the nodebb 'email:*:confirm' records to true
         // and will del all the 'confirm:*KEYS*:emails' too
