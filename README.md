@@ -64,7 +64,7 @@ read carefully:
 
 ## Example usage
 #### Readme: 
-This is a not a normal plugin, at the moment there is no way to run it from the NodeBB/admin panel, you must install it in NodeBB/node_modules/nodebb-plugin-ubbmigrator
+This is a not a normal NodeBB Plugin, at the moment there is no way to run it from the NodeBB/admin panel, you must install it in NodeBB/node_modules/nodebb-plugin-ubbmigrator
 ```bash
 # that's your nodebb installation
 # I should not need to ask you to try this on a staging machine or locally first
@@ -90,14 +90,19 @@ node run.js
 ```
 ### run.js with your configs
 ```javasript
-var migrator = require('./library.js');
-
-migrator.common.migrate({
 
     // common configs
     common: {
 
         log: 'debug', // or just 'info,warn,error' to spam the log
+
+        // generate passwords for the users, yea
+        passwordGen: {
+            // chars selection menu
+            chars: '!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890',
+            // password length
+            len: 13
+        },
 
         nginx: {
             // ONLY replace the 'MY_UBB_PATH' and 'MY_NBB_PATH' and leave the ${FROM} and ${TO} as they will be replaced appropriately
@@ -111,8 +116,8 @@ migrator.common.migrate({
 
         // if enabled, this is a memory hog,
         // YOU WILL HIT MEMORY limits for large forums (5k+ each users, topics, posts - that depends on your machine but you know what i mean)
-        markdown: false,
-
+        // read the markdown note below
+        markdown: false
     },
 
     // ubb specific configs
@@ -131,8 +136,11 @@ migrator.common.migrate({
 
     nbb: {
         resetup: {
+
             // to run: node app --setup={...} with setupVal below
             // !!!! IMPORTANT !!! THIS WILL FLUSH YOUR NodeBB Redis Database
+
+            // ALSO turning this false will resume where it left off, meaning if something crashes, just turn this to false
             run: true,
 
             // the stringified object to be passed to --setup
@@ -158,12 +166,47 @@ migrator.common.migrate({
         // if you want to auto confirm the user's accounts..
         autoConfirmEmails: true
     }
-});
 ```
 ### Future versions support
 * Will keep supporting future NodeBB versions, since it's still very young and I'm a fan, but you need to submit an issue with all the details (NodeBB version, UBB version, issue etc..), and I will help as fast as I can.
 * Will not support multi-UBB versions, unless minor point releases, not major
 * If you're running an old version of UBB, upgrade to 7.5.7, then migrate
+
+### Redis Note
+
+You may need to edit your Redis configs temporarly, things such as increasing memory limit, disabling timeouts etc..
+find the redis.conf file and make some changes to it
+
+```
+# Close the connection after a client is idle for N seconds (0 to disable)
+timeout 0
+
+# some huge numbers here
+# after 20000 seconds if at least 9000000 keys changed,
+# I am not a redis expert, so i may be wrong here, but this means my Redis will not write to disk for a long time
+# long enough to run the migration, then you could manually call ```redis-cli bgsave``` to save to disk after the migration is done
+save 20000 9000000
+
+# this one is important too, I hit that error few times during large migrations
+
+# By default Redis will stop accepting writes if RDB snapshots are enabled
+# (at least one save point) and the latest background save failed.
+# This will make the user aware (in an hard way) that data is not persisting
+# on disk properly, otherwise chances are that no one will notice and some
+# distater will happen.
+#
+# If the background saving process will start working again Redis will
+# automatically allow writes again.
+#
+# However if you have setup your proper monitoring of the Redis server
+# and persistence, you may want to disable this feature so that Redis will
+# continue to work as usually even if there are problems with disk,
+# permissions, and so forth.
+stop-writes-on-bgsave-error no
+
+# there is other stuff with ```appendfsync``` and ```maxmemory-policy``` but not sure what these are exactly, consulte someone else.
+
+```
 
 ### Markdown Note
 

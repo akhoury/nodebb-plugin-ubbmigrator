@@ -1,5 +1,5 @@
 /*
- if you're reading this source please not that 'NodeBB' == 'nbb' ==  'Nbb' == 'NBB' as a terminology
+ if you're reading this source please note that 'NodeBB' == 'nbb' ==  'Nbb' == 'NBB' as a terminology
  and ubb means the UBB Threads Forum Software, here's a link => http://www.ubbcentral.com/
 
  This Converter is written and tested for UBB 7.5.7 which was released sometime in 2013, that migrates to NodeBB 0.1.1
@@ -66,6 +66,7 @@ var
     async = require('async'),
     fs = require('fs.extra'),
     http = require('http'),
+    storage = require('node-persist'),
 
 // a quick logger
     Logger = require('./logger.js'),
@@ -80,7 +81,7 @@ module.exports = m = {
 
             async.series([
                 function(next){
-                    console.log("comon.init()");
+                    console.log("common.init()");
                     m.common.init(config, next);
                 },
                 function(next){
@@ -89,8 +90,10 @@ module.exports = m = {
                 },
                 function(next) {
                     if (m.nbb.config.resetup && m.nbb.config.resetup.run) {
+                        logger.debug('nbb.resetup()');
                         m.nbb.resetup(next);
                     } else {
+                        logger.debug('nbb.reloadMem()');
                         m.nbb.reloadMem(next);
                     }
                 },
@@ -167,14 +170,7 @@ module.exports = m = {
                         rule: ' rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;'
                     },
 
-                    // where to save memory files
-                    mem: {
-                        users: './tmp/users.json',
-                        forums: './tmp/forums.json',
-                        topics: './tmp/topics.json',
-                        posts: './tmp/posts.json',
-                        file: './tmp/mem.json'
-                    }
+                    markdown: false
                 }
                 , config.common);
 
@@ -193,22 +189,25 @@ module.exports = m = {
 
                     // Limit ubb queries to certain time frames
                     // timestamp in SECONDS
+                    // this is potentially problematic,
+                    // since you can't migrate a topic or post that was created by a user who you wish not to migrate
+                    // I wouldn't use that, maybe for testing .. like limit your migration to pre 2005 to test it out quick, like I do
                     timeMachine: {
                         users: {
-                            before: null,
-                            after: null
+                            after: null,
+                            before: null
                         },
                         forums: {
-                            before: null,
-                            after: null
+                            after: null,
+                            before: null
                         },
                         topics: {
-                            before: null,
-                            after: null
+                            after: null,
+                            before: null
                         },
                         posts: {
-                            before: null,
-                            after: null
+                            after: null,
+                            before: null
                         }
                     }
                 }
@@ -218,7 +217,7 @@ module.exports = m = {
                 {
                     resetup: {
                         run: false,
-                        flushdb: false,
+
                         setupVal:  {
                             'admin:username': 'admin',
                             'admin:password': 'password',
@@ -250,16 +249,12 @@ module.exports = m = {
                     adminAddedReputation: 1000,
 
                     moderatorsLikeGroupName: "GoldClub",
-                    moderatorsLikeGroupDescription: "Previous migrated moderators",
-
-                    // somewhere to hold the admins and moderators gids
-                    groups: {
-                        administrators: {},
-                        moderators: {}
-                    }
+                    moderatorsLikeGroupDescription: "Previous migrated moderators"
 
                 }, config.nbb);
 
+
+            storage.initSync();
 
             logger = Logger.init(m.common.config.log);
             logger.debug('init()');
@@ -270,36 +265,23 @@ module.exports = m = {
 
         setup: function(next){
 
-            // create a map from ubb ids to new nbb data
-            // useful for saving clear temp passwords for users
-            // and creating ReWriteRules
-
+            // temp memory
             m.mem = {
                 users: {
-                    normalized: {},
-                    migrated: {},
-                    skipped: {},
-                    lastMigrated: 0
+                    normalized: {}
                 },
                 forums: {
-                    normalized: {},
-                    migrated: {},
-                    skipped: {},
-                    lastMigrated: 0
+                    normalized: {}
                 },
                 topics: {
-                    normalized: {},
-                    migrated: {},
-                    skipped: {},
-                    lastMigrated: 0
+                    normalized: {}
                 },
                 posts: {
-                    normalized: {},
-                    migrated: {},
-                    skipped: {},
-                    lastMigrated: 0
+                    normalized: {}
                 }
             };
+
+            m.mem.startTime = new Date();
 
             if (!m.ubb.config.db) throw new Error('config.ubb.db needs to be passed in to common.migrate()');
 
@@ -307,36 +289,15 @@ module.exports = m = {
             m.ubb.connection = mysql.createConnection(m.ubb.config.db);
             m.ubb.connection.connect();
 
-            if (m.nbb.config.resetup.run || !fs.existsSync(m.common.config.mem.file)) {
-                fs.createFileSync(m.common.config.mem.users);
-                fs.createFileSync(m.common.config.mem.forums);
-                fs.createFileSync(m.common.config.mem.topics);
-                fs.createFileSync(m.common.config.mem.posts);
-                fs.createFileSync(m.common.config.mem.file);
-                m.common.slowWriteJSONtoFile(m.common.config.mem.file, {}, next);
-            }
+            if (m.nbb.config.resetup.run)
+                storage.clear();
+
+            next();
         },
 
         // helpers
 
         report: function(next) {
-
-            logger.log('Look for these files for the maps: ');
-            logger.log('They\'ll look something like this: (all the attributes that starts with \'_\' are the old ones)');
-            logger.log(m.common.config.mem.users);
-            logger.log('\t{\n' + '\n\t\tnormalized: null,\n\t\tmigrated: {...},\n\t\tskipped: {...}\n\t}');
-            logger.log(m.common.config.mem.forums);
-            logger.log('\t{\n' + '\n\t\tnormalized: null,\n\t\tmigrated: {...},\n\t\tskipped: {...}\n\t}');
-            logger.log(m.common.config.mem.topics);
-            logger.log('\t{\n' + '\n\t\tnormalized: null,\n\t\tmigrated: {...},\n\t\tskipped: {...}\n\t}');
-            logger.log(m.common.config.mem.posts);
-            logger.log('\t{\n' + '\n\t\tnormalized: null,\n\t\tmigrated: {...},\n\t\tskipped: {...}\n\t}');
-
-            logger.log('\n\n======================MIGRATION REPORT==================\n');
-            logger.log('Users: skipped: ' + Object.keys(m.mem.users.skipped).length + ' - migrated: ' + Object.keys(m.mem.users.migrated).length);
-            logger.log('Forums: skipped: ' + Object.keys(m.mem.forums.skipped).length + ' - migrated: ' + Object.keys(m.mem.forums.migrated).length);
-            logger.log('Topics: skipped: ' + Object.keys(m.mem.topics.skipped).length + ' - migrated: ' + Object.keys(m.mem.topics.migrated).length);
-            logger.log('Posts: skipped: ' + Object.keys(m.mem.posts.skipped).length + ' - migrated: ' + Object.keys(m.mem.posts.migrated).length + '\n\n');
 
             logger.log('====  REMEMBER TO:\n'
                 + '\n\t*-) Email all your users their new passwords, find them in the map file reported few lines up.'
@@ -345,7 +306,7 @@ module.exports = m = {
                 + '\n\t*-) Create a nodebb-theme that works with your site\n'
                 + '\n\t*-) I may write a NodeBB plugin to enforce one time use of temp passwords, if you beat me to it, let me know\n');
 
-            logger.info("DONE");
+            logger.info('DONE, Took ' + (((new Date()).getTime() - m.mem.startTime.getTime()) / 1000 / 60).toFixed(2) + ' minutes.');
             next();
         },
 
@@ -521,20 +482,8 @@ module.exports = m = {
         },
 
         // dont ask
-        saveMap: function(file, map, length, wat, next, key) {
-            if (typeof map == 'array' && key)
-                map = m.common.convertListToMap(map, key);
+        saveMap: function(file, nbbid, ubbid) {
 
-            // just save a copy in my big ubbToNbbMap for later, minus the correct website and avatar, who cares for now.
-            m.common.slowWriteJSONtoFile(file, map, function(_err) {
-                if (!_err)
-                    logger.info(length + ' ' + wat + ' saved, MAP in ' + file);
-                else
-                    logger.error('Could not write NBB Users ' + _err);
-
-                if (typeof next == 'function')
-                    next();
-            });
         }
     },
 
@@ -570,17 +519,26 @@ module.exports = m = {
                     + 'WHERE ' + prefix + 'USERS.USER_ID = ' + prefix + 'USER_PROFILE.USER_ID '
 
                     + (m.ubb.config.timeMachine.users.before ?
-                    'AND ' + prefix + 'USERS.USER_REGISTERED_ON < ' + m.ubb.config.timeMachine.users.before : '');
-            if (m.mem.users.normalized)
+                    'AND ' + prefix + 'USERS.USER_REGISTERED_ON < ' + m.ubb.config.timeMachine.users.before : ' ')
+
+                    + (m.ubb.config.timeMachine.users.after ?
+                    'AND ' + prefix + 'USERS.USER_REGISTERED_ON >= ' + m.ubb.config.timeMachine.users.after : ' ');
+
+            var users = storage.getItem('ubb.getUsers');
+
+            if (users) {
+                m.mem.users.normalized = users;
+                next();
+            } else {
                 m.ubb.query(query, function(err, rows) {
                     if (err) throw err;
 
                     logger.info('Users query came back with ' + rows.length + ' records, now preparing, please be patient.');
                     m.mem.users.normalized = m.ubb._normalizeUsers(rows);
+                    storage.setItem('ubb.getUsers', m.mem.users.normalized);
                     next();
                 });
-            else
-                next();
+            }
         },
 
         _normalizeUsers: function(users) {
@@ -622,13 +580,13 @@ module.exports = m = {
                             logger.info('Prepared ' + ui + ' users so far.');
 
                     } else {
-                        m.mem.users.skipped[user._ouid] = user;
+                        storage.setItem('users.skipped._ouid.' + user._ouid, user);
                         users.slice(ui, 1);
                         logger.warn('[!username] skipping user ' + user._username + ':' + user._email + ' _ouid: ' + user._ouid);
                     }
                 } else {
                     logger.warn('[!_username | !_joindate | !_email] skipping user ' + user._username + ':' + user._email + ' _ouid: ' + user._ouid);
-                    m.mem.users.skipped[user._ouid] = user;
+                    storage.setItem('users.skipped._ouid.' + user._ouid, user);
                     users.slice(ui, 1);
                 }
             });
@@ -646,6 +604,7 @@ module.exports = m = {
 
         // get ubb forums
         getForums: function(next) {
+
             var prefix = m.ubb.config.tablePrefix
                 , query = 'SELECT '
                     + prefix + 'FORUMS.FORUM_ID as _ofid, '
@@ -654,20 +613,28 @@ module.exports = m = {
                     + prefix + 'FORUMS.CATEGORY_ID as _categoryId, '
                     + prefix + 'FORUMS.FORUM_CREATED_ON as _datetime '
                     + 'FROM ' + prefix + 'FORUMS '
+                    + 'WHERE 1 = 1 '
                     + (m.ubb.config.timeMachine.forums.before ?
-                    'WHERE ' + prefix + 'FORUMS.FORUM_CREATED_ON < ' + m.ubb.config.timeMachine.forums.before : '');
+                    'AND ' + prefix + 'FORUMS.FORUM_CREATED_ON < ' + m.ubb.config.timeMachine.forums.before : ' ')
+                    + (m.ubb.config.timeMachine.forums.after ?
+                    'AND ' + prefix + 'FORUMS.FORUM_CREATED_ON >= ' + m.ubb.config.timeMachine.forums.after : ' ');
 
-            if (m.mem.forums.normalized)
+            var forums = storage.getItem('ubb.getForums');
+
+            if (forums) {
+                m.mem.forums.normalized = forums;
+                next();
+            } else {
                 m.ubb.query(query,
                     function(err, rows){
                         if (err) throw err;
 
                         logger.info('Forums query came back with ' + rows.length + ' records, now preparing, please be patient.');
                         m.mem.forums.normalized = m.ubb._normalizeForums(rows);
+                        storage.setItem('ubb.getForums', m.mem.forums.normalized);
                         next();
                     });
-            else
-                next();
+            }
         },
 
         // ubb.forums == nbb.categories
@@ -696,7 +663,7 @@ module.exports = m = {
 
                 } else {
                     logger.warn('skipping forum ' + forum._name + ':' + forum._description + ' _ofid: ' + forum._ofid);
-                    m.mem.forums.skipped[forum._ofid] = forum;
+                    storage.setItem('forums.skipped._ofid.' + forum._ofid, forum);
                     forums.slice(fi, 1);
                 }
             });
@@ -733,19 +700,26 @@ module.exports = m = {
                         + 'AND ' + prefix + 'POSTS.POST_PARENT_ID=0 '
 
                         + (m.ubb.config.timeMachine.topics.before ?
-                        'AND ' + prefix + 'TOPICS.TOPIC_CREATED_TIME < ' + m.ubb.config.timeMachine.topics.before : '');
+                        'AND ' + prefix + 'TOPICS.TOPIC_CREATED_TIME < ' + m.ubb.config.timeMachine.topics.before : ' ')
+                        + (m.ubb.config.timeMachine.topics.after ?
+                        'AND ' + prefix + 'TOPICS.TOPIC_CREATED_TIME >= ' + m.ubb.config.timeMachine.topics.after : ' ');
 
-            if (m.mem.topics.normalized)
+            var topics = storage.getItem('ubb.getTopics');
+
+            if (topics) {
+                m.mem.topics.normalized = topics;
+                next();
+            } else {
                 m.ubb.query(query,
                     function(err, rows) {
                         if (err) throw err;
 
                         logger.info('Topics query came back with ' + rows.length + ' records, now preparing, please be patient.');
                         m.mem.topics.normalized = m.ubb._normalizeTopics(rows);
+                        storage.setItem('ubb.getTopics', m.mem.topics.normalized);
                         next();
                     });
-            else
-                next();
+            }
         },
 
         // ubb.forums == nbb.categories
@@ -782,7 +756,7 @@ module.exports = m = {
                     var falsyIndex = m.common.whichIsFalsy(requiredValues);
 
                     logger.warn('Skipping topic: ' + topic._otid + ' titled: ' + topic._title + ' because ' + requiredKeys[falsyIndex] + ' is falsy. Value: ' + requiredValues[falsyIndex]);
-                    m.mem.topics.skipped[topic._otid] = topic;
+                    storage.setItem('topics.skipped._otid.' + topic._otid, topic);
                     topics.slice(ti, 1);
                 }
             });
@@ -802,18 +776,25 @@ module.exports = m = {
                         + 'FROM ' + prefix + 'POSTS '
                         + 'WHERE POST_PARENT_ID > 0 '
                         + (m.ubb.config.timeMachine.posts.before ?
-                        'AND POST_POSTED_TIME < ' + m.ubb.config.timeMachine.posts.before : '');
+                        'AND POST_POSTED_TIME < ' + m.ubb.config.timeMachine.posts.before : ' ')
+                        + (m.ubb.config.timeMachine.posts.after ?
+                        'AND POST_POSTED_TIME >= ' + m.ubb.config.timeMachine.posts.after : ' ');
 
-            if (m.mem.posts.normalized)
+            var posts = storage.getItem('ubb.getPosts');
+
+            if (posts) {
+                m.mem.posts.normalized = posts;
+                next();
+            } else {
                 m.ubb.query(query, function(err, rows) {
                     if (err) throw err;
 
                     logger.info('Posts query came back with ' + rows.length + ' records, now preparing, please be patient.');
                     m.mem.posts.normalized = m.ubb._ubbNormalizePosts(rows);
+                    storage.setItem('ubb.getPosts', m.mem.posts.normalized);
                     next();
                 });
-            else
-                next();
+            }
         },
 
         _ubbNormalizePosts: function(posts) {
@@ -844,7 +825,7 @@ module.exports = m = {
                     var falsyIndex = m.common.whichIsFalsy(requiredValues);
 
                     logger.warn('Skipping post: ' + post._opid + ' because ' + requiredKeys[falsyIndex] + ' is falsy. Value: ' + requiredValues[falsyIndex]);
-                    m.mem.posts.skipped[post._opid] = post;
+                    storage.setItem('posts.skipped._opid.' + post._opid, post);
                     posts.slice(pi, 1);
                 }
             });
@@ -905,8 +886,7 @@ module.exports = m = {
             });
         },
 
-        reloadMem: function(next){
-            // reload somehow
+        reloadMem: function(next) {
             next();
         },
 
@@ -926,24 +906,22 @@ module.exports = m = {
         setupGroups: function(next){
 
             Group.getGidFromName('Administrators', function(err, gid) {
-                // save a reference for the admins gid
-                m.nbb.config.groups.administrators.gid = gid;
+                // save it
+                storage.setItem('nbb.groups.administrators.gid', gid);
 
                 // create an moderators group from the users who are ubb Moderators
                 Group.create(m.nbb.config.moderatorsLikeGroupName, m.nbb.config.moderatorsLikeGroupDescription, function(err, groupData) {
                     if (err) {
                         if (err.message == 'group-exists') {
                             Group.getGidFromName(m.nbb.config.moderatorsLikeGroupName, function(err, mgid){
-                                // save a reference to the gid to use it when needed, bro
-                                m.nbb.config.groups.moderators.gid = mgid;
+                                // save it to use it when needed, bro
+                                storage.setItem('nbb.groups.moderators.gid', mgid);
                                 m.nbb.backupConfig(next);
                             });
                         }
                     } else {
-
-                        console.log(groupData);
-                        // save a reference to the gid to use it when needed, bro
-                        m.nbb.config.groups.moderators.gid = groupData.gid;
+                        // save it
+                        storage.setItem("nbb.groups.moderators.gid", groupData.gid);
                         m.nbb.backupConfig(next);
                     }
                 });
@@ -996,6 +974,7 @@ module.exports = m = {
                     logger.warn(m.nbb.config.backedConfig);
                     throw err;
                 }
+
                 next();
             });
         },
@@ -1004,33 +983,41 @@ module.exports = m = {
         // save the UBB users to nbb's redis
         setUsers: function(next) {
             var count = 0;
-            if (!m.mem.users || !m.mem.users.normalized) {
-                m.mem.users = require(m.common.config.mem.users);
-                next();
-                return;
-            }
 
-            logger.debug("Administrator gid: " + m.nbb.config.groups.administrators.gid + " Moderators gid: " + m.nbb.config.groups.moderators.gid);
+            var nbbAdministratorsGid = storage.getItem('nbb.groups.administrators.gid');
+            var nbbModeratorsGid = storage.getItem('nbb.groups.moderators.gid');
+
+            logger.debug("Administrator gid: " + nbbAdministratorsGid + " Moderators gid: " + nbbModeratorsGid);
 
             var users = m.mem.users.normalized;
             var _users = Object.keys(users);
 
             async.eachSeries(_users, function(key, done) {
-                var user = users[key];
+                var user = users[key]; count++;
 
-                if (!user.username) {
-                    m.mem.users.skipped[user._ouid] = user;
-                    logger.warn('username: "' + (user.username || user._username) + '" is invalid.');
+                var migratedUser = storage.getItem('users.migrated._ouid.' + user._ouid);
+                var skippedUser = storage.getItem('users.skipped._ouid.' + user._ouid);
+
+                if (migratedUser || skippedUser) {
+                    logger.info('[c:' + count + '] user: ' + user._ouid + ' already processed, result: ' + (migratedUser ? 'migrated' : 'skipped'));
                     delete m.mem.users.normalized[user._ouid];
                     done();
                     return;
                 }
 
-                logger.debug('[idx: ' + count++ + '] saving user: ' + user.username);
+                if (!user.username) {
+                    storage.setItem('users.skipped._ouid.' + user._ouid, user);
+                    logger.warn('[c:' + count + '] user: "' + (user.username || user._username) + '" is invalid.');
+                    delete m.mem.users.normalized[user._ouid];
+                    done();
+                    return;
+                }
+
+                logger.debug('[c: ' + count + '] saving user: ' + user.username);
                 User.create(user.username, user.password, user.email, function(err, uid) {
                     if (err) {
                         logger.error(' username: "' + user.username + '" ' + err + ' .. skipping');
-                        m.mem.users.skipped[user._ouid] = user;
+                        storage.setItem('users.skipped._ouid.' + user._ouid, user);
                         delete m.mem.users.normalized[user._ouid];
                         done();
                     } else {
@@ -1039,12 +1026,12 @@ module.exports = m = {
 
                         if (user._level == 'Moderator') {
                             reputation = m.nbb.config.moderatorAddedReputation + user._rating;
-                            Group.join(m.nbb.config.groups.moderators.gid, uid, function(){
+                            Group.join(nbbModeratorsGid, uid, function(){
                                 logger.info(user.username + ' became a Moderator');
                             });
                         } else if (user._level == 'Administrator') {
                             reputation = m.nbb.config.adminAddedReputation + user._rating;
-                            Group.join(m.nbb.config.groups.administrators.gid, uid, function(){
+                            Group.join(nbbAdministratorsGid, uid, function(){
                                 logger.info(user.username + ' became an Administrator');
                             });
                         } else {
@@ -1077,10 +1064,10 @@ module.exports = m = {
 
                         _u_.redirectRule = m.common.redirectRule('users/' + user._ouid + '/' + user._username + '/', 'user/' + user.userslug);
 
-                        User.setUserFields(uid, _u_, function(){
+                        User.setUserFields(uid, _u_, function() {
                             _u_.uid = uid;
 
-                            m.mem.users.migrated[user._ouid] = $.extend({}, user, _u_);
+                            storage.setItem('users.migrated._ouid.' + user._ouid, $.extend({}, user, _u_));
                             delete m.mem.users.normalized[user._ouid];
 
                             if (m.nbb.config.autoConfirmEmails)
@@ -1095,24 +1082,20 @@ module.exports = m = {
             }, function(){
 
                 // hard code the first UBB Admin user as migrated, as it may actually own few posts/topics
-                m.mem.users.migrated["1"] = {
-                    uid: 1
-                };
+                storage.setItem('users.migrated._ouid.1', {uid: 1});
 
                 m.mem.users.normalized = null;
-                m.common.slowWriteJSONtoFile(m.common.config.mem.users, m.mem.users, function(){
 
-                    if (m.nbb.config.autoConfirmEmails) {
-                        RDB.keys('confirm:*:email', function(err, keys){
-                            keys.forEach(function(key){
-                                RDB.del(key);
-                            });
-                            next();
+                if (m.nbb.config.autoConfirmEmails) {
+                    RDB.keys('confirm:*:email', function(err, keys){
+                        keys.forEach(function(key){
+                            RDB.del(key);
                         });
-                    } else {
                         next();
-                    }
-                });
+                    });
+                } else {
+                    next();
+                }
             });
         },
 
@@ -1121,36 +1104,40 @@ module.exports = m = {
         setForums: function(next) {
             var count = 0;
 
-            if (!m.mem.forums || !m.mem.forums.normalized) {
-                m.mem.forums = require(m.common.config.mem.forums);
-                next();
-                return;
-            }
-
             var forums = m.mem.forums.normalized;
             var _forums = Object.keys(forums);
 
             async.eachSeries(_forums, function(key, done) {
 
-                var forum = forums[key];
-                logger.debug('[idx:' + count++ + '] saving forum (aka category) : ' + forum.name);
+                var forum = forums[key]; count++;
+
+                var migratedForum = storage.getItem('forums.migrated._ofid.' + forum._ofid);
+                var skippedForum = storage.getItem('forums.skipped._ofid.' + forum._ofid);
+
+                if (migratedForum || skippedForum) {
+                    logger.info('[c:' + count + '] forum: ' + forum._ofid + ' already processed, result: ' + (migratedForum ? 'migrated' : 'skipped'));
+                    delete m.mem.forums.normalized[forum._ofid];
+                    done();
+                    return;
+                }
+
+                logger.debug('[c:' + count + '] saving forum (aka category) : ' + forum.name);
 
                 Categories.create(forum, function(err, categoryData) {
                     if (err) {
                         logger.error('forum: ' + forum.title + ' : ' + err);
-                        m.mem.forums.skipped[forum._ofid] = $.extend({}, forum, categoryData || {});
+                        storage.setItem('forums.skipped._ofid.' + forum._ofid, $.extend({}, forum, categoryData || {}));
                         delete m.mem.forums.normalized[forum._ofid];
                         done();
                     } else {
                         categoryData.redirectRule = m.common.redirectRule('forums/' + forum._ofid + '/', 'category/' + categoryData.slug);
-                        m.mem.forums.migrated[forum._ofid] = $.extend({}, forum, categoryData);
+                        storage.setItem('forums.migrated._ofid.' + forum._ofid, $.extend({}, forum, categoryData || {}));
                         done();
                     }
                 });
             }, function(){
-
                 m.mem.forums.normalized = null;
-                m.common.slowWriteJSONtoFile(m.common.config.mem.forums, m.mem.forums, next);
+                next();
             });
         },
 
@@ -1158,25 +1145,28 @@ module.exports = m = {
         setTopics: function(next) {
             var count = 0;
 
-            if (!m.mem.topics || !m.mem.topics.normalized) {
-                m.mem.topics = require(m.common.config.mem.topics);
-                next();
-                return;
-            }
-
             var topics = m.mem.topics.normalized;
             var _topics = Object.keys(topics);
 
             async.eachSeries(_topics, function(key, done) {
-                var topic = topics[key];
+                var topic = topics[key]; count++;
 
-                var forum = m.mem.forums.migrated[topic._forumId];
-                var user = m.mem.users.migrated[topic._userId];
+                var migratedTopic = storage.getItem('topics.migrated._otid.' + topic._otid);
+                var skippedTopic = storage.getItem('topics.skipped._otid.' + topic._otid);
+
+                if (migratedTopic || skippedTopic) {
+                    logger.info('[c:' + count + '] topic: ' + topic._otid + ' already processed, result: ' + (migratedTopic ? 'migrated' : 'skipped'));
+                    delete m.mem.topics.normalized[topic._otid];
+                    done();
+                    return;
+                }
+
+                var forum = storage.getItem('forums.migrated._ofid.' + topic._forumId);
+                var user = storage.getItem('users.migrated._ouid.' + topic._userId);
 
                 if (!user || !forum) {
-                    logger.error('topic: "' + topic._title + '" _old-forum-valid: ' + !!forum  + ' _old-user-valid: ' + !!user + ' .. skipping');
-                    m.mem.topics.skipped[topic._otid] = topic;
-
+                    logger.error('[c:' + count + '] topic: "' + topic._title + '" _old-forum-valid: ' + !!forum  + ' _old-user-valid: ' + !!user + ' .. skipping');
+                    storage.setItem('topics.skipped._otid.' + topic._otid, topic);
                     delete m.mem.topics.normalized[topic._otid];
                     done();
                 } else {
@@ -1185,12 +1175,11 @@ module.exports = m = {
                     topic.cid = forum.cid;
                     topic.uid = user.uid;
 
-                    logger.debug('[idx:' + count++ + '] saving topic: ' + topic.title);
+                    logger.debug('[c:' + count + '] saving topic: ' + topic.title);
                     Topics.post(topic.uid, topic.title, topic.content, topic.cid, function(err, ret){
                         if (err) {
                             logger.error('topic: ' + topic.title + ' ' + err + ' ... skipping');
-                            m.mem.topics.skipped[topic._otid] = topic;
-
+                            storage.setItem('topics.skipped._otid.' + topic._otid, topic);
                             delete m.mem.topics.normalized[topic._otid];
                             done();
                         } else {
@@ -1201,8 +1190,8 @@ module.exports = m = {
                             Topics.setTopicField(ret.topicData.tid, 'pinned', topic.pinned);
                             Posts.setPostField(ret.postData.pid, 'timestamp', topic.timestamp);
                             Posts.setPostField(ret.postData.pid, 'relativeTime', topic.relativeTime);
-                            m.mem.topics.migrated[topic._otid] = ($.extend({}, topic, ret.topicData));
 
+                            storage.setItem('topics.migrated._otid.' + topic._otid, $.extend({}, topic, ret.topicData));
                             delete m.mem.topics.normalized[topic._otid];
                             done();
                         }
@@ -1210,32 +1199,36 @@ module.exports = m = {
                 }
             }, function(){
                 m.mem.topics.normalized = null;
-                m.common.slowWriteJSONtoFile(m.common.config.mem.topics, m.mem.topics, next);
+                next();
             });
         },
 
         // save the UBB posts to nbb's redis
         setPosts: function(next) {
             var count = 0;
-
-            if (!m.mem.posts || !m.mem.posts.normalized) {
-                m.mem.posts = require(m.common.config.mem.posts);
-                next();
-                return;
-            }
-
             var posts = m.mem.posts.normalized;
             var _posts = Object.keys(posts);
 
             async.eachSeries(_posts, function(key, done) {
-                var post = posts[key];
-                var topic = m.mem.topics.migrated[post._topicId];
-                var user = m.mem.users.migrated[post._userId];
+                var post = posts[key]; count++;
+
+
+                var migratedPost = storage.getItem('posts.migrated._opid.' + post._opid);
+                var skippedPost = storage.getItem('posts.skipped._opid.' + post._opid);
+
+                if (migratedPost || skippedPost) {
+                    logger.info('post: ' + post._opid + ' already processed, result: ' + (migratedPost ? 'migrated' : 'skipped'));
+                    delete m.mem.posts.normalized[post._opid];
+                    done();
+                    return;
+                }
+
+                var topic = storage.getItem('topics.migrated._otid.' + post._topicId);
+                var user = storage.getItem('users.migrated._ouid.' + post._userId);
 
                 if (!user || !topic) {
                     logger.error('post: "' + post._opid + '" _old-topic-valid: ' + !!topic + ' _old-user-valid: ' + !!user +   ' .. skipping');
-                    m.mem.posts.skipped[post._opid] = post;
-
+                    storage.setItem('posts.skipped._opid.' + post._opid, post);
                     delete m.mem.posts.normalized[post._opid];
                     done();
                 } else {
@@ -1243,19 +1236,18 @@ module.exports = m = {
                     post.tid = topic.tid;
                     post.uid = user.uid;
 
-                    logger.debug('[idx: ' + count++ + '] saving post: ' + post._opid);
+                    logger.debug('[c: ' + count + '] saving post: ' + post._opid);
                     Posts.create(post.uid, post.tid, post.content || '', function(err, postData){
                         if (err) {
                             logger.error('post: ' + post._opid + ' ' + err + ' ... skipping');
-                            m.mem.posts.skipped[post._opid] = post;
-
+                            storage.setItem('posts.skipped._opid.' + post._opid, post);
                             delete m.mem.posts.normalized[post._opid];
                             done();
                         } else {
                             postData.redirectRule = m.common.redirectRule('topics/' + post._topicId + '/(.)*#Post' + post._opid, 'topic/' + post.tid + '#' + postData.pid);
                             Posts.setPostField(postData.pid, 'timestamp', post.timestamp);
                             Posts.setPostField(postData.pid, 'relativeTime', post.relativeTime);
-                            m.mem.posts.migrated[post._opid] = $.extend({}, post, postData);
+                            storage.setItem('posts.migrated._opid.' + post._opid, $.extend({}, post, postData));
 
                             delete m.mem.posts.normalized[post._opid];
                             done();
@@ -1264,7 +1256,7 @@ module.exports = m = {
                 }
             }, function(){
                 m.mem.posts.normalized = null;
-                m.common.slowWriteJSONtoFile(m.common.config.mem.posts, m.mem.posts, next);
+                next();
             });
         }
     }

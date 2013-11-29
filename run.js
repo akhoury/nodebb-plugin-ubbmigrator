@@ -27,16 +27,7 @@ migrator.common.migrate({
 
         // if enabled, this is a memory hog,
         // YOU WILL HIT MEMORY limits for large forums (5k+ each users, topics, posts - that depends on your machine but you know what i mean)
-        markdown: false,
-
-
-        mem: {
-            users: './tmp/users.json',
-            forums: './tmp/forums.json',
-            topics: './tmp/topics.json',
-            posts: './tmp/posts.json',
-            file: './tmp/mem.json'
-        }
+        markdown: false
     },
 
     // ubb specific configs
@@ -66,25 +57,22 @@ migrator.common.migrate({
 
         // Limit ubb queries to certain time frames
         // timestamp in SECONDS, that's what UBB uses
+        // after is inclusive
         timeMachine: {
             users: {
                 before: null, //1049942244,
-                // todo, after doesn't work yet
                 after: null
             },
             forums: {
                 before: null, //1049942244,
-                // todo, after doesn't work yet
                 after: null
             },
             topics: {
                 before: null, // 1049942244,
-                // todo, after doesn't work yet
                 after: null
             },
             posts: {
                 before: null, // 1049942244,
-                // todo, after doesn't work yet
                 after: null
             }
         }
@@ -92,8 +80,11 @@ migrator.common.migrate({
 
     nbb: {
         resetup: {
+
             // to run: node app --setup={...} with setupVal below
             // !!!! IMPORTANT !!! THIS WILL FLUSH YOUR NodeBB Redis Database
+
+            // ALSO turning this false will resume where it left off, meaning if something crashes, just turn this to false
             run: true,
 
             // the stringified object to be passed to --setup
