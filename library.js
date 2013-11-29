@@ -271,22 +271,9 @@ module.exports = m = {
         setup: function(next){
 
             // temp memory
-            m.mem = {
-                users: {
-                    normalized: {}
-                },
-                forums: {
-                    normalized: {}
-                },
-                topics: {
-                    normalized: {}
-                },
-                posts: {
-                    normalized: {}
-                }
-            };
+            m.mem = {};
 
-            m.mem.startTime = new Date();
+            m.mem.startTime = new Date().getTime();
 
             if (!m.ubb.config.db) throw new Error('config.ubb.db needs to be passed in to common.migrate()');
 
@@ -304,14 +291,6 @@ module.exports = m = {
 
         report: function(next) {
 
-
-            logger.log('\n\n======================MIGRATION REPORT==================\n');
-            logger.log('Users: skipped: ' + glob.sync(m.common.config.storageDir + '/users.skipped._ouid.*').length + ' - migrated: ' + glob.sync(m.common.config.storageDir + '/users.migrated._ouid.*').length);
-            logger.log('Forums: skipped: ' + glob.sync(m.common.config.storageDir + '/forums.skipped._ofid.*').length  + ' - migrated: ' + glob.sync(m.common.config.storageDir + '/forums.migrated._ofid.*').length);
-            logger.log('Topics: skipped: ' + glob.sync(m.common.config.storageDir + '/topics.skipped._otid.*').length + ' - migrated: ' + glob.sync(m.common.config.storageDir + '/topics.migrated._otid.*').length);
-            logger.log('Posts: skipped: ' + glob.sync(m.common.config.storageDir + './posts.skipped._opid.*').length  + ' - migrated: ' + glob.sync(m.common.config.storageDir + '/posts.migrated._opid.*').length + '\n\n');
-
-
             logger.log('====  REMEMBER TO:\n'
                 + '\n\t*-) Email all your users their new passwords, find them in the map file reported few lines up.'
                 + '\n\t*-) Go through all users in the saved users map, each who has user.customPicture == true, test the image url if 200 or not, also filter the ones pointing to your old forum avatar dir, or keep that dir ([YOUR_UBB_PATH]/images/avatars/*) path working, your call'
@@ -319,7 +298,7 @@ module.exports = m = {
                 + '\n\t*-) Create a nodebb-theme that works with your site\n'
                 + '\n\t*-) I may write a NodeBB plugin to enforce one time use of temp passwords, if you beat me to it, let me know\n');
 
-            logger.info('DONE, Took ' + (((new Date()).getTime() - m.mem.startTime.getTime()) / 1000 / 60).toFixed(2) + ' minutes.');
+            logger.info('DONE, Took ' + (((new Date()).getTime() - m.mem.startTime) / 1000 / 60).toFixed(2) + ' minutes.');
             next();
         },
 

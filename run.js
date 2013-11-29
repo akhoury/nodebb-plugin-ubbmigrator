@@ -58,19 +58,19 @@ migrator.common.migrate({
         timeMachine: {
             users: {
                 after: null,
-                before: null //1049942244
+                before: 1049942244 //1049942244
             },
             forums: {
                 after: null,
-                before: null
+                before: 1049942244
             },
             topics: {
                 after: null,
-                before: null
+                before: 1049942244
             },
             posts: {
                 after: null,
-                before: null
+                before: 1049942244
             }
         }
     },
