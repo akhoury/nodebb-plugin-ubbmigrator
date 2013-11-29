@@ -1082,15 +1082,15 @@ module.exports = m = {
 
                 logger.debug('[c:' + count + '] saving forum (aka category) : ' + forum.name);
 
-                Categories.create(forum, function(err, categoryData) {
+                Categories.create(forum, function(err, categoryReturn) {
                     if (err) {
                         logger.error('forum: ' + forum.title + ' : ' + err);
                         forumData.skipped = forum;
                         storage.setItem('f.' + _ofid, forumData);
                         done();
                     } else {
-                        categoryData.redirectRule = m.common.redirectRule('forums/' + _ofid + '/', 'category/' + categoryData.slug);
-                        forumData.migrated = $.extend({}, forum, categoryData || {});
+                        categoryReturn.redirectRule = m.common.redirectRule('forums/' + _ofid + '/', 'category/' + categoryReturn.slug);
+                        forumData.migrated = $.extend({}, forum, categoryReturn || {});
                         storage.setItem('f.' + _ofid, forumData);
                         done();
                     }
@@ -1197,18 +1197,18 @@ module.exports = m = {
                     post.uid = user.uid;
 
                     logger.debug('[c: ' + count + '] saving post: ' + _opid);
-                    Posts.create(post.uid, post.tid, post.content || '', function(err, postData){
+                    Posts.create(post.uid, post.tid, post.content || '', function(err, postReturn){
                         if (err) {
                             logger.error('post: ' + post._opid + ' ' + err + ' ... skipping');
                             postData.skipped = post;
                             storage.setItem('p.' + _opid, postData);
                             done();
                         } else {
-                            postData.redirectRule = m.common.redirectRule('topics/' + post._topicId + '/(.)*#Post' + _opid, 'topic/' + post.tid + '#' + postData.pid);
-                            Posts.setPostField(postData.pid, 'timestamp', post.timestamp);
-                            Posts.setPostField(postData.pid, 'relativeTime', post.relativeTime);
+                            postReturn.redirectRule = m.common.redirectRule('topics/' + post._topicId + '/(.)*#Post' + _opid, 'topic/' + post.tid + '#' + postReturn.pid);
+                            Posts.setPostField(postReturn.pid, 'timestamp', post.timestamp);
+                            Posts.setPostField(postReturn.pid, 'relativeTime', post.relativeTime);
 
-                            postData.migrated = $.extend({}, post, postData);
+                            postData.migrated = $.extend({}, post, postReturn);
                             storage.setItem('p.' + _opid, postData);
                             done();
                         }
