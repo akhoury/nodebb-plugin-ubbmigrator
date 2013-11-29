@@ -260,6 +260,10 @@ module.exports = m = {
             m.common.config.storageDir = path.resolve(m.common.config.storageDir);
 
             logger.debug("Setting storage dir to: " + m.common.config.storageDir);
+
+            if (m.nbb.config.resetup.run)
+                storage.clear();
+
             storage.initSync({
                 dir: m.common.config.storageDir
             });
@@ -790,6 +794,7 @@ module.exports = m = {
                     postData.skipped = post;
                     posts.slice(pi, 1);
                 }
+                storage.setItem('p.' + post._opid, postData);
             });
             logger.info('Preparing posts done. kept ' + kept + '/' + posts.length + '\n\n\n');
             return _opids;
@@ -1113,8 +1118,11 @@ module.exports = m = {
                     return;
                 }
 
-                var forum = storage.getItem('forums.migrated._ofid.' + topic._forumId);
-                var user = storage.getItem('users.migrated._ouid.' + topic._userId);
+                var forumData = storage.getItem('f.' + topic._forumId);
+                var userData = storage.getItem('u.' + topic._userId);
+
+                var forum = (forumData || {}).migrated;
+                var user = (userData || {}).migrated;
 
                 if (!user || !forum) {
                     logger.error('[c:' + count + '] topic: "' + topic._title + '" _old-forum-valid: ' + !!forum  + ' _old-user-valid: ' + !!user + ' .. skipping');
@@ -1172,8 +1180,11 @@ module.exports = m = {
                     return;
                 }
 
-                var topic = storage.getItem('topics.migrated._otid.' + post._topicId);
-                var user = storage.getItem('users.migrated._ouid.' + post._userId);
+                var topicData = storage.getItem('t.' + post._topicId);
+                var userData = storage.getItem('u.' + post._userId);
+
+                var topic = (topicData || {}).migrated;
+                var user = (userData || {}).migrated;
 
                 if (!user || !topic) {
                     logger.error('post: "' + _opid + '" _old-topic-valid: ' + !!topic + ' _old-user-valid: ' + !!user +   ' .. skipping');
