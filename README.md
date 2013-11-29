@@ -184,7 +184,7 @@ timeout 0
 # some huge numbers here
 # after 20000 seconds if at least 9000000 keys changed,
 # I am not a redis expert, so i may be wrong here, but this means my Redis will not write to disk for a long time
-# long enough to run the migration, then you could manually call ```redis-cli bgsave``` to save to disk after the migration is done
+# long enough to run the migration, then you could manually call 'redis-cli bgsave' to save to disk after the migration is done
 save 20000 9000000
 
 # this one is important too, I hit that error few times during large migrations
@@ -204,7 +204,7 @@ save 20000 9000000
 # permissions, and so forth.
 stop-writes-on-bgsave-error no
 
-# there is other stuff with ```appendfsync``` and ```maxmemory-policy``` but not sure what these are exactly, consulte someone else.
+# there is other stuff with 'appendfsync' and 'maxmemory-policy' but not sure what these are exactly, consulte someone else.
 
 ```
 

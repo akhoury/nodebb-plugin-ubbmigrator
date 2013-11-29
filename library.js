@@ -8,16 +8,12 @@
 // todo !!!!! HITTING MEMORY LIMITS OVER 18k POSTS IF MARKDOWNING IS TURNED ON !!
 // todo maybe go through all users who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to my old forum avatar dir
 // todo go through all the html content and Markdown it
-
 // todo still, make sure the old [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars
 // todo generate my nginx rewrite rules from the logs
-
 // todo create a nodebb-theme that works with the site
 // todo create a nodebb-plugin that submits all the new user's emails to my mailchimp account
 // todo send emails to all users with temp passwords
-
 // todo if I have time, maybe implement a nbb plugin that enforces the 1 time use of temp passwords.
-// todo nothing is really skippable at the moment, the nodebb db needs to be flushed, run node app.js --setup, then node app.js --upgrade
 // todo TEST yo
 
 
