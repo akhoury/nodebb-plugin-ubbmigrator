@@ -55,25 +55,22 @@ migrator.common.migrate({
         // ubb default, I think
         tablePrefix: 'ubbt_',
 
-        // Limit ubb queries to certain time frames
-        // timestamp in SECONDS, that's what UBB uses
-        // after is inclusive
         timeMachine: {
             users: {
-                before: null, //1049942244,
-                after: null
+                after: null,
+                before: null //1049942244
             },
             forums: {
-                before: null, //1049942244,
-                after: null
+                after: null,
+                before: null
             },
             topics: {
-                before: null, // 1049942244,
-                after: null
+                after: null,
+                before: null
             },
             posts: {
-                before: null, // 1049942244,
-                after: null
+                after: null,
+                before: null
             }
         }
     },

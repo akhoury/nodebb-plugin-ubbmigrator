@@ -28,6 +28,7 @@
     "dependencies": {
         "jquery": "~1.8.3",
         "fs.extra": "~1.2.1",
+        "glob": "~3.2.7",
         "async": "~0.2.9",
         "html-md": "~3.0.2",
         "exec-sync": "~0.1.6",
