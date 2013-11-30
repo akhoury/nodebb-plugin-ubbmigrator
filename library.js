@@ -308,7 +308,7 @@ module.exports = m = {
 
         redirectRule: function(from, to) {
             var res = m.common.config.nginx.rule.replace('${FROM}', from).replace('${TO}', to);
-            logger.debug(res);
+            logger.info(res);
             return res;
         },
 
@@ -711,6 +711,7 @@ module.exports = m = {
 
                     topic.title = topic._title ? topic._title[0].toUpperCase() + topic._title.substr(1) : 'Untitled';
                     topic.timestamp = time;
+                    topic.teaser_timestamp = time;
                     topic.relativeTime = new Date(time).toISOString();
                     topic.viewcount = topic._views || 0;
                     topic.pinned = topic._pinned || 0;
