@@ -967,6 +967,15 @@ module.exports = m = {
             });
         },
 
+        // aka forums
+        makeModeratorOnAllCategories: function(uid){
+            m.mem._ofids.forEach(function(_ofid) {
+            var forum = storage.getItem('f.' + _ofid);
+                if (forum && forum.cid)
+                    RDB.sadd('cid:' + forum.cid + ':moderators', uid);
+            });
+        },
+
         // im nice
         restoreConfig: function(next) {
             m.nbb.config = require('./.nbb.config.json');
@@ -996,7 +1005,7 @@ module.exports = m = {
                 var skippedForum = forumData.skipped;
 
                 if (migratedForum || skippedForum) {
-                    logger.info('[c:' + count + '] forum: ' + _ofid + ' already processed, result: ' + (migratedForum ? 'migrated' : 'skipped'));
+                    logger.info('[c:' + count + '] forum: ' + _ofid + ' already processed, destiny: ' + (migratedForum ? 'migrated' : 'skipped'));
                     process.nextTick(done);
                     // return;
                 } else {
@@ -1007,12 +1016,20 @@ module.exports = m = {
                             logger.error('forum: ' + forum.title + ' : ' + err);
                             forumData.skipped = forum;
                             storage.setItem('f.' + _ofid, forumData);
-                            process.nextTick(done);
+                            // todo hack!
+                            // process.nextTick is also crashing
+                            setTimeout(function(){
+                                done();
+                            }, 1);
                         } else {
                             categoryReturn.redirectRule = m.common.redirectRule('forums/' + _ofid + '/', 'category/' + categoryReturn.slug);
                             forumData.migrated = $.extend({}, forum, categoryReturn || {});
                             storage.setItem('f.' + _ofid, forumData);
-                            process.nextTick(done);
+                            // todo hack!
+                            // process.nextTick is also crashing
+                            setTimeout(function(){
+                                done();
+                            }, 1);
                         }
                     });
                 }
@@ -1036,15 +1053,21 @@ module.exports = m = {
                 var skippedUser = userData.skipped;
 
                 if (migratedUser || skippedUser) {
-                    logger.info('[c:' + count + '] user: ' + _ouid + ' already processed, result: ' + (migratedUser ? 'migrated' : 'skipped'));
-                    process.nextTick(done);
-                    //return;
+                    logger.info('[c:' + count + '] user: ' + _ouid + ' already processed, destiny: ' + (migratedUser ? 'migrated' : 'skipped'));
+                    // todo hack!
+                    // process.nextTick is also crashing
+                    setTimeout(function(){
+                        done();
+                    }, 1);
                 } else {
                     if (!user.username) {
                         userData.skipped = user;
                         logger.warn('[c:' + count + '] user: "' + (user.username || user._username) + '" is invalid.');
-                        process.nextTick(done);
-                        //return;
+                        // todo hack!
+                        // process.nextTick is also crashing
+                        setTimeout(function(){
+                            done();
+                        }, 1);
                     } else {
                         logger.debug('[c: ' + count + '] saving user: ' + user.username);
                         User.create(user.username, user.password, user.email, function(err, uid) {
@@ -1053,15 +1076,20 @@ module.exports = m = {
                                 logger.error(' username: "' + user.username + '" ' + err + ' .. skipping');
                                 userData.skipped = user;
                                 storage.setItem('u.' + _ouid, userData);
-                                process.nextTick(done);
+                                // todo hack!
+                                // process.nextTick is also crashing
+                                setTimeout(function(){
+                                    done();
+                                }, 1);
                             } else {
 
                                 var reputation = 0;
 
                                 if (user._level == 'Moderator') {
                                     reputation = m.nbb.config.moderatorAddedReputation + user._rating;
-                                    Group.join(nbbModeratorsGid, uid, function(){
-                                        logger.info(user.username + ' became a Moderator');
+                                    Group.join(nbbModeratorsGid, uid, function() {
+                                        logger.info(user.username + ' just became a moderator on all categories');
+                                        m.nbb.makeModeratorOnAllCategories(uid);
                                     });
                                 } else if (user._level == 'Administrator') {
                                     reputation = m.nbb.config.adminAddedReputation + user._rating;
@@ -1104,11 +1132,19 @@ module.exports = m = {
                                     if (m.nbb.config.autoConfirmEmails) {
                                         RDB.set('email:' + user.email + ':confirm', true, function(){
                                             storage.setItem('u.' + _ouid, userData);
-                                            process.nextTick(done);
+                                            // todo hack!
+                                            // process.nextTick is also crashing
+                                            setTimeout(function(){
+                                                done();
+                                            }, 1);
                                         });
                                     } else {
                                         storage.setItem('u.' + _ouid, userData);
-                                        process.nextTick(done);
+                                        // todo hack!
+                                        // process.nextTick is also crashing
+                                        setTimeout(function(){
+                                            done();
+                                        }, 1);
                                     }
                                 });
                             }
@@ -1147,9 +1183,12 @@ module.exports = m = {
                 var skippedTopic = topicData.skipped;
 
                 if (migratedTopic || skippedTopic) {
-                    logger.info('[c:' + count + '] topic: ' + _otid + ' already processed, result: ' + (migratedTopic ? 'migrated' : 'skipped'));
-                    process.nextTick(done);
-                    // return;
+                    logger.info('[c:' + count + '] topic: ' + _otid + ' already processed, destiny: ' + (migratedTopic ? 'migrated' : 'skipped'));
+                    // todo hack!
+                    // process.nextTick is also crashing
+                    setTimeout(function(){
+                        done();
+                    }, 1);
                 }  else {
 
                     var forumData = storage.getItem('f.' + topic._forumId);
@@ -1162,7 +1201,11 @@ module.exports = m = {
                         logger.error('[c:' + count + '] topic: "' + topic._title + '" _old-forum-valid: ' + !!forum  + ' _old-user-valid: ' + !!user + ' .. skipping');
                         topicData.skipped = topic;
                         storage.setItem('t.' + _otid, topicData);
-                        process.nextTick(done);
+                        // todo hack!
+                        // process.nextTick is also crashing
+                        setTimeout(function(){
+                            done();
+                        }, 1);
                     } else {
 
                         // forum aka categories, that's why the cid here from nbb (instead of a fid)
@@ -1175,7 +1218,11 @@ module.exports = m = {
                                 logger.error('topic: ' + topic.title + ' ' + err + ' ... skipping');
                                 topicData.skipped = topic;
                                 storage.setItem('t.' + _otid, topicData);
-                                process.nextTick(done);
+                                // todo hack!
+                                // process.nextTick is also crashing
+                                setTimeout(function(){
+                                    done();
+                                }, 1);
                             } else {
                                 ret.topicData.redirectRule = m.common.redirectRule('topics/' + _otid + '/', 'topic/' + ret.topicData.slug);
 
@@ -1187,7 +1234,11 @@ module.exports = m = {
 
                                 topicData.migrated = $.extend({}, topic, ret.topicData);
                                 storage.setItem('t.' + _otid, topicData);
-                                process.nextTick(done);
+                                // todo hack!
+                                // process.nextTick is also crashing
+                                setTimeout(function(){
+                                    done();
+                                }, 1);
                             }
                         });
                     }
@@ -1209,9 +1260,12 @@ module.exports = m = {
                 var skippedPost = postData.skipped;
 
                 if (migratedPost || skippedPost) {
-                    logger.info('post: ' + _opid + ' already processed, result: ' + (migratedPost ? 'migrated' : 'skipped'));
-                    process.nextTick(done);
-                    // return;
+                    logger.info('post: ' + _opid + ' already processed, destiny: ' + (migratedPost ? 'migrated' : 'skipped'));
+                    // todo hack!
+                    // process.nextTick is also crashing
+                    setTimeout(function(){
+                        done();
+                    }, 1);
                 } else {
                     var topicData = storage.getItem('t.' + post._topicId);
                     var userData = storage.getItem('u.' + post._userId);
@@ -1223,7 +1277,11 @@ module.exports = m = {
                         logger.error('post: "' + _opid + '" _old-topic-valid: ' + !!topic + ' _old-user-valid: ' + !!user +   ' .. skipping');
                         postData.skipped = post;
                         storage.setItem('p.' + _opid, postData);
-                        process.nextTick(done);
+                        // todo hack!
+                        // process.nextTick is also crashing
+                        setTimeout(function(){
+                            done();
+                        }, 1);
                     } else {
 
                         post.tid = topic.tid;
@@ -1235,7 +1293,11 @@ module.exports = m = {
                                 logger.error('post: ' + post._opid + ' ' + err + ' ... skipping');
                                 postData.skipped = post;
                                 storage.setItem('p.' + _opid, postData);
-                                process.nextTick(done);
+                                // todo hack!
+                                // process.nextTick is also crashing
+                                setTimeout(function(){
+                                    done();
+                                }, 1);
                             } else {
                                 postReturn.redirectRule = m.common.redirectRule('topics/' + post._topicId + '/(.)*#Post' + _opid, 'topic/' + post.tid + '#' + postReturn.pid);
                                 Posts.setPostField(postReturn.pid, 'timestamp', post.timestamp);
@@ -1243,7 +1305,11 @@ module.exports = m = {
 
                                 postData.migrated = $.extend({}, post, postReturn);
                                 storage.setItem('p.' + _opid, postData);
-                                process.nextTick(done);
+                                // todo hack!
+                                // process.nextTick is also crashing
+                                setTimeout(function(){
+                                    done();
+                                }, 1);
                             }
                         });
                     }
