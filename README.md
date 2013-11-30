@@ -85,24 +85,22 @@ cd nodebb-plugin-ubbmigrator
 vim run.js
 
 # then 
-node run.js
-# and hope for the best.
+node run.js --flush
+# and hope for the best
+# !!!! the --flush flag WILL flush your NodeBB database, clear all the temp. storage from prvious runs and starts fresh
+# do NOT use the --flush flag if you are attempting to resume after some failure or interruption
+
 ```
 ### run.js with your configs
 ```javasript
+var migrator = require('./library.js');
+
+migrator.common.migrate({
 
     // common configs
     common: {
 
-        log: 'debug', // or just 'info,warn,error' to spam the log
-
-        // generate passwords for the users, yea
-        passwordGen: {
-            // chars selection menu
-            chars: '!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890',
-            // password length
-            len: 13
-        },
+        log: 'debug', // or just 'info,warn,error' if you don't want to spam the logs too much
 
         nginx: {
             // ONLY replace the 'MY_UBB_PATH' and 'MY_NBB_PATH' and leave the ${FROM} and ${TO} as they will be replaced appropriately
@@ -116,7 +114,6 @@ node run.js
 
         // if enabled, this is a memory hog,
         // YOU WILL HIT MEMORY limits for large forums (5k+ each users, topics, posts - that depends on your machine but you know what i mean)
-        // read the markdown note below
         markdown: false
     },
 
@@ -136,14 +133,7 @@ node run.js
 
     nbb: {
         resetup: {
-
-            // to run: node app --setup={...} with setupVal below
-            // !!!! IMPORTANT !!! THIS WILL FLUSH YOUR NodeBB Redis Database
-
-            // ALSO turning this false will resume where it left off, meaning if something crashes, just turn this to false
-            run: true,
-
-            // the stringified object to be passed to --setup
+            // the stringified object to be passed to NodeBB's 'node app --setup={...}'
             setupVal:  {
                 'admin:username': 'admin',
                 'admin:password': 'password',
@@ -161,11 +151,17 @@ node run.js
             }
         },
 
+        // to be randomly selected from migrating the ubb.forums
+        categoriesTextColors: ['#FFFFFF'],
+        categoriesBgColors: ['#ab1290','#004c66','#0059b2'],
+        categoriesIcons: ['fa-comment'],
+
         // this will set the nodebb 'email:*:confirm' records to true
         // and will del all the 'confirm:*KEYS*:emails' too
         // if you want to auto confirm the user's accounts..
         autoConfirmEmails: true
     }
+});
 ```
 ### Future versions support
 * Will keep supporting future NodeBB versions, since it's still very young and I'm a fan, but you need to submit an issue with all the details (NodeBB version, UBB version, issue etc..), and I will help as fast as I can.

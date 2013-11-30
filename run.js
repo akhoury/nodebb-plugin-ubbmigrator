@@ -77,14 +77,7 @@ migrator.common.migrate({
 
     nbb: {
         resetup: {
-
-            // to run: node app --setup={...} with setupVal below
-            // !!!! IMPORTANT !!! THIS WILL FLUSH YOUR NodeBB Redis Database
-
-            // ALSO turning this false will resume where it left off, meaning if something crashes, just turn this to false
-            run: true,
-
-            // the stringified object to be passed to --setup
+            // the stringified object to be passed to NodeBB's 'node app --setup={...}'
             setupVal:  {
                 'admin:username': 'admin',
                 'admin:password': 'password',
