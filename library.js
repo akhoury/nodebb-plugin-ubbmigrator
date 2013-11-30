@@ -532,6 +532,13 @@ module.exports = m = {
             var kept = 0, _ouids = [];
 
             users.forEach(function(user, ui) {
+                var stored = storage.getItem('u.' + user._ouid);
+                if (stored && (stored.normalized || stored.skipped)) {
+                    logger.debug('[c:' + ui + '] user: ' + user._ouid + ' already normalized');
+                    _ouids.push(user._ouid);
+                    return;
+                }
+
                 var userData = {};
                 if (user._username && user._joindate && user._email) {
 
@@ -616,6 +623,13 @@ module.exports = m = {
             var kept = 0, _ofids = [];
 
             forums.forEach(function(forum, fi) {
+                var stored = storage.getItem('f.' + forum._ofid);
+                if (stored && (stored.normalized || stored.skipped)) {
+                    logger.debug('[c:' + fi + '] forum: ' + forum._ofid + ' already normalized');
+                    _ofids.push(forum._ofid);
+                    return;
+                }
+
                 var forumData = {};
                 if (forum._name && forum._description) {
 
@@ -694,6 +708,13 @@ module.exports = m = {
             var kept = 0, _otids = [];
 
             topics.forEach(function(topic, ti) {
+                var stored = storage.getItem('t.' + topic._otid);
+                if (stored && (stored.normalized || stored.skipped)) {
+                    logger.debug('[c:' + ti + '] topic: ' + topic._otid + ' already normalized');
+                    _otids.push(topic._otid);
+                    return;
+                }
+
                 var topicData = {};
                 var forumData = storage.getItem('f.' + topic._forumId);
                 var userData = storage.getItem('u.' + topic._userId);
@@ -762,7 +783,14 @@ module.exports = m = {
         _ubbNormalizePosts: function(posts) {
             var kept = 0, _opids = [];
 
-            posts.forEach(function(post, pi){
+            posts.forEach(function(post, pi) {
+                var stored = storage.getItem('p.' + post._opid);
+                if (stored && (stored.normalized || stored.skipped)) {
+                    logger.debug('[c:' + pi + '] post: ' + post._opid + ' already normalized');
+                    _opids.push(post._opid);
+                    return;
+                }
+
                 var postData = {};
                 var topicData = storage.getItem('t.' + post._topicId);
                 var userData = storage.getItem('u.' + post._userId);
