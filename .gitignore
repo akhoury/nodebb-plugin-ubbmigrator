@@ -17,4 +17,4 @@ node_modules
 *.sql
 tmp
 .nbb.config.json
-!ubb_tiny.sql
+!ubbtest.sql

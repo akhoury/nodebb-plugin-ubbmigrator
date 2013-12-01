@@ -3,6 +3,9 @@
     "name": "UBB to NodeBB Migrator Plugin",
     "description": "Converts your UBB Topics, Posts and Users to NodeBB",
     "url": "https://github.com/akhoury/nodebb-plugin-ubbmigrator",
-    "library": "./library.js",
-    "hooks": []
+    "library": "./index.js",
+    "hooks": [
+		{ "hook": "filter:admin.header.build", "method": "admin.menu", "callbacked": false },
+		{ "hook": "filter:admin.create_routes", "method": "admin.route", "callbacked": true },
+	]
 }

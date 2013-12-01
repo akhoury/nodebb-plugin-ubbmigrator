@@ -1,14 +1,18 @@
-###No official release yet, this is a pre-alfa version. Not yet well tested for Large Forums, but will be soon.
+###No official release yet, this is a pre-alfa version.
 
-<br />
+<br/>
 
 nodebb-plugin-ubbmigrator
 =========
 
-UBB to NodeBB forum migrator, a one time use thing, you know, like a condom. 
+UBB to NodeBB forum migrator, a one time use thing.
 
 <br />
 
+### What?
+This is a not a normal NodeBB Plugin, at the moment there is no way to run it from the NodeBB/admin panel, so it doesn't really matter
+if it's activated or not, as long as you find this readme somehow.
+you must install it in NodeBB/node_modules/nodebb-plugin-ubbmigrator, then you run it from the command line, for the time being.
 
 ### What does it migrate:
 
@@ -63,8 +67,6 @@ read carefully:
   - UBB 7.5.7 ---> NodeBB 0.1.1
 
 ## Example usage
-#### Readme: 
-This is a not a normal NodeBB Plugin, at the moment there is no way to run it from the NodeBB/admin panel, you must install it in NodeBB/node_modules/nodebb-plugin-ubbmigrator
 ```bash
 # that's your nodebb installation
 # I should not need to ask you to try this on a staging machine or locally first
@@ -93,10 +95,15 @@ node run.js --flush
 ```
 ### run.js with your configs
 ```javasript
-var migrator = require('./library.js');
+var migrator = require('./ubbmigrator.js'),
+	config = require('./run.config.json');
 
-migrator.common.migrate({
-
+migrator.common.migrate(config);
+```
+### your config are required
+see [run.config.json](run.config.json), obviously I can't comment a JSON file, so I will here
+```
+{
     // common configs
     common: {
 
@@ -134,6 +141,7 @@ migrator.common.migrate({
     nbb: {
         resetup: {
             // the stringified object to be passed to NodeBB's 'node app --setup={...}'
+            // these will only be used if you use the --flush flag
             setupVal:  {
                 'admin:username': 'admin',
                 'admin:password': 'password',
@@ -161,48 +169,22 @@ migrator.common.migrate({
         // if you want to auto confirm the user's accounts..
         autoConfirmEmails: true
     }
-});
+
+    // there is few more if you're interested, look in the source
+}
 ```
+
 ### Future versions support
+
 * Will keep supporting future NodeBB versions, since it's still very young and I'm a fan, but you need to submit an issue with all the details (NodeBB version, UBB version, issue etc..), and I will help as fast as I can.
 * Will not support multi-UBB versions, unless minor point releases, not major
 * If you're running an old version of UBB, upgrade to 7.5.7, then migrate
 
 ### Redis Note
 
-You may need to edit your Redis configs temporarly, things such as increasing memory limit, disabling timeouts etc..
-find the redis.conf file and make some changes to it
-
-```
-# Close the connection after a client is idle for N seconds (0 to disable)
-timeout 0
-
-# some huge numbers here
-# after 20000 seconds if at least 9000000 keys changed,
-# I am not a redis expert, so i may be wrong here, but this means my Redis will not write to disk for a long time
-# long enough to run the migration, then you could manually call 'redis-cli bgsave' to save to disk after the migration is done
-save 20000 9000000
-
-# this one is important too, I hit that error few times during large migrations
-
-# By default Redis will stop accepting writes if RDB snapshots are enabled
-# (at least one save point) and the latest background save failed.
-# This will make the user aware (in an hard way) that data is not persisting
-# on disk properly, otherwise chances are that no one will notice and some
-# distater will happen.
-#
-# If the background saving process will start working again Redis will
-# automatically allow writes again.
-#
-# However if you have setup your proper monitoring of the Redis server
-# and persistence, you may want to disable this feature so that Redis will
-# continue to work as usually even if there are problems with disk,
-# permissions, and so forth.
-stop-writes-on-bgsave-error no
-
-# there is other stuff with 'appendfsync' and 'maxmemory-policy' but not sure what these are exactly, consulte someone else.
-
-```
+see [redis.ubbmigrator.conf](redis.ubbmigrator.conf), look for [ubbmigrator] tag to find the temporary changes you need to make.
+remember to backup your original config, you will need them after the migration.
+If you're an redis guru, you don't need my help, but take a look at it anyway and let me know where I went wrong :)
 
 ### Markdown Note
 
@@ -213,6 +195,20 @@ so I disbaled it, for the record I am using `html-md`. You can still enable it b
 Having that said, if you leave it disabled, you still need to convert that content to Markdown somehow,
 but I'll let you do that. Or you can wait for me to write a NodeBB client-side plugin that will understands html content or something..
 or write your own, or submit another solution, I'm open for that, till then, expect to see html tags in the migrated post-contents and user signatures, if the markdown is disabled.
+
+### TODO
+* todo !!!!! HITTING MEMORY LIMITS OVER 18k POSTS IF MARKDOWNING IS TURNED ON !!
+* todo maybe go through all users who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to my old forum avatar dir
+* todo still, make sure the old [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars
+* todo create a nodebb-theme that works with the site
+* todo send emails to all users with temp passwords
+* todo if I have time, maybe implement a nbb plugin that enforces the 1 time use of temp passwords.
+* todo TEST yo
+
+### Terminology
+
+In the source please note that 'NodeBB' == 'nbb' ==  'Nbb' == 'NBB' as a terminology
+and ubb means the UBB Threads Forum Software, here's a link => [ubbcentral.com](http://www.ubbcentral.com)
 
 
     

@@ -34,6 +34,7 @@
         "optimist": "~0.6.0",
         "exec-sync": "~0.1.6",
         "node-persist": "git://github.com/simonlast/node-persist.git",
-        "mysql": "~2.0.0"
+        "mysql": "~2.0.0",
+		"marked": "~0.2.10"
     }
 }

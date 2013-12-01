@@ -1,0 +1,55 @@
+{
+	"common": {
+
+
+		"log": "debug",
+
+		"passwordGen": {
+			"chars": "!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890",
+			"len": 13
+		},
+
+		"nginx": {
+
+			"rule": "rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;"
+		},
+
+		"markdown": false
+	},
+
+	"ubb": {
+		"db": {
+			"host": "localhost",
+			"user":"ubb_user",
+			"password": "password",
+			"database": "ubb_test"
+		},
+
+		"tablePrefix": "ubbt_"
+	},
+
+	"nbb": {
+		"resetup": {
+			"setupVal":  {
+				"admin:username": "admin",
+				"admin:password": "password",
+				"admin:password:confirm": "password",
+				"admin:email": "you@example.com",
+				"base_url": "http://localhost",
+				"port": "4567",
+				"use_port": "y",
+				"redis:host": "127.0.0.1",
+				"redis:port": 6379,
+				"redis:password": "",
+				"redis:database": 0,
+				"bind_address": "0.0.0.0",
+				"secret": ""
+			}
+		},
+
+		"categoriesTextColors": ["#FFFFFF"],
+		"categoriesBgColors": ["#ab1290","#004c66","#0059b2"],
+		"categoriesIcons": ["fa-comment"],
+		"autoConfirmEmails": true
+	}
+}
