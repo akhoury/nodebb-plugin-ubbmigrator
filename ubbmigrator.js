@@ -150,11 +150,11 @@ module.exports = m = {
 						// this will be stdout as [info] per each record and also added to the report map.
 						// I am not an nginx expert, but this should be enough for you if you are.
 
-						rule: ' rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;'
+						rule: '[nginx] rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;'
 					},
 
 
-					storageDir: path.join(__dirname,  '/../storage'),
+					storageDir: path.join(__dirname,  './storage'),
 
 					markdown: false
 				}
@@ -181,19 +181,19 @@ module.exports = m = {
 					timeMachine: {
 						users: {
 							after: null,
-							before: null
+							before: 1042918861
 						},
 						forums: {
 							after: null,
-							before: null
+							before: 1042918861
 						},
 						topics: {
 							after: null,
-							before: null
+							before: 1042918861
 						},
 						posts: {
 							after: null,
-							before: null
+							before: 1042918861
 						}
 					}
 				}
@@ -300,7 +300,7 @@ module.exports = m = {
 
 		redirectRule: function(from, to) {
 			var res = m.common.config.nginx.rule.replace('${FROM}', from).replace('${TO}', to);
-			logger.sensitive(res);
+			logger.useful(res);
 			return res;
 		},
 
@@ -1006,6 +1006,8 @@ module.exports = m = {
 							}, 1);
 						} else {
 							categoryReturn.redirectRule = m.common.redirectRule('forums/' + _ofid + '/', 'category/' + categoryReturn.slug);
+							logger.useful('{"_ofid":' + _ofid + ',"cid":' + categoryReturn.cid + '}');
+
 							forumData.migrated = $.extend({}, forum, categoryReturn || {});
 							storage.setItem('f.' + _ofid, forumData);
 							// todo hack!
@@ -1108,7 +1110,7 @@ module.exports = m = {
 								}
 
 								_u_.redirectRule = m.common.redirectRule('users/' + user._ouid + '/' + user._username + '/', 'user/' + user.userslug);
-								logger.sensitive('user_ouid:' + user._ouid + ',uid:' + uid + ',e:' + user.email + ',u:' + user.username + ',p:' + user.password);
+								logger.useful('{"_ouid":' + user._ouid + ',"uid":' + uid + ',"email":"' + user.email + '","username":"' + user.username + '","pwd":"' + user.password + '","ms":' + _u_.joindate + '}');
 
 								User.setUserFields(uid, _u_, function() {
 									_u_.uid = uid;
@@ -1209,6 +1211,7 @@ module.exports = m = {
 								}, 1);
 							} else {
 								ret.topicData.redirectRule = m.common.redirectRule('topics/' + _otid + '/', 'topic/' + ret.topicData.slug);
+								logger.useful('{"_otid":' + topic._otid + ',"tid":' + ret.topicData.tid + ',"ms":' + topic.timestamp +'}');
 
 								Topics.setTopicField(ret.topicData.tid, 'timestamp', topic.timestamp);
 								Topics.setTopicField(ret.topicData.tid, 'viewcount', topic.viewcount);
@@ -1284,6 +1287,7 @@ module.exports = m = {
 								}, 1);
 							} else {
 								postReturn.redirectRule = m.common.redirectRule('topics/' + post._topicId + '/(.)*#Post' + _opid, 'topic/' + post.tid + '#' + postReturn.pid);
+								logger.useful('{"_opid":' + post._opid + ',"pid":' + postReturn.pid + ',"ms":' + post.timestamp + '}');
 								Posts.setPostField(postReturn.pid, 'timestamp', post.timestamp);
 								Posts.setPostField(postReturn.pid, 'relativeTime', post.relativeTime);
 

@@ -2,7 +2,7 @@
 	"common": {
 
 
-		"log": "debug",
+		"log": "sensitive,info,wran,error,debug",
 
 		"passwordGen": {
 			"chars": "!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890",
@@ -30,20 +30,21 @@
 		"timeMachine": {
 			"users": {
 				"after": null,
-				"before": 1104537600
+				"before": null //1004537600
 			},
 			"forums": {
 				"after": null,
-				"before": 1104537600
+				"before": null // 1004537600
 			},
 			"topics": {
 				"after": null,
-				"before": 1104537600
+				"before": null //1004537600
 			},
 			"posts": {
 				"after": null,
-				"before": 1104537600
+				"before": null // 1004537600
 			}
+		}
 	},
 
 	"nbb": {

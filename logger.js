@@ -6,7 +6,7 @@ module.exports = {
         this.i = this.l.indexOf("info") >= 0;
         this.w = this.l.indexOf("warn") >= 0;
         this.e = this.l.indexOf("error") >= 0;
-        this.s = this.l.indexOf("sensitive") >= 0;
+        this.s = this.l.indexOf("useful") >= 0;
 
         //rules
         this.i = this.d || this.i;
@@ -23,7 +23,7 @@ module.exports = {
         if (!this.e)
             this.error = function(){};
 		if (!this.s)
-            this.sensitive = function(){};
+            this.useful = function(){};
 
         return this;
     },
@@ -42,7 +42,7 @@ module.exports = {
     debug: function(s) {
             console.log(this.p + "[debug] " + s);
     },
-	sensitive: function(s) {
-            console.log(this.p + "[sensitive] " + s);
+	useful: function(s) {
+            console.log(this.p + "[useful] " + s);
     }
 };

@@ -87,9 +87,12 @@ cd nodebb-plugin-ubbmigrator
 vim run.js
 
 # then 
-node run.js --flush
+node run.js --flush | gretee migration.log
 # and hope for the best
-# !!!! the --flush flag WILL flush your NodeBB database, clear all the temp. storage from prvious runs and starts fresh
+# I would grep the [useful] lines out stuff later, they're very useful for redirection purposes, getting users email/username/passwd to send them out etc..
+# or you could find a gazillion file in the ./storage directory after the migration is done, and read them one by one.. up to you and/or your developer
+
+# !!!! the --flush flag WILL flush your NodeBB database, clears out all the temp storage from previous runs and starts fresh
 # do NOT use the --flush flag if you are attempting to resume after some failure or interruption
 
 ```
@@ -107,7 +110,7 @@ see [run.config.json](run.config.json), obviously I can't comment a JSON file, s
     // common configs
     common: {
 
-        log: 'debug', // or just 'info,warn,error' if you don't want to spam the logs too much
+        log: 'useful,warn,error,info', // or just 'debug' if you want to spam the logs
 
         nginx: {
             // ONLY replace the 'MY_UBB_PATH' and 'MY_NBB_PATH' and leave the ${FROM} and ${TO} as they will be replaced appropriately
@@ -207,8 +210,18 @@ or write your own, or submit another solution, I'm open for that, till then, exp
 
 ### Terminology
 
-In the source please note that 'NodeBB' == 'nbb' ==  'Nbb' == 'NBB' as a terminology
-and ubb means the UBB Threads Forum Software, here's a link => [ubbcentral.com](http://www.ubbcentral.com)
+* 'NodeBB' == 'nbb' ==  'Nbb' == 'NBB' as a terminology
+* 'ubb' == 'UBB' == 'Ubb' means the UBB Threads Forum Software, here's a link => [ubbcentral.com](http://www.ubbcentral.com)
+* '_ouid' == 'Old user id' the UBB user id
+* 'uid' == 'User id' the NodeBB uid
+* '_ofid' == 'Old forum id' the UBB forum id
+* 'cid' == 'Category id' the NodeBB Category id (Ubb.Forums become NodeBB Categories)
+* '_otid' == 'Old topic id' UBB Topic id
+* 'tid' == 'Topic id' NodeBB Topic id
+* '_opid' == 'Old post id' UBB Post id
+* 'pid' == 'Post id' NodeBB post id
+* '_variablename' meaning every variable/property/key that starts with an '_' is probably a UBB variable, before it got normalized, after normalziation, it will loose the '_' and probably change name, i.e. _userPicture --> avatar
+
 
 
     
