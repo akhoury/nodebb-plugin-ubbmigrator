@@ -1006,8 +1006,11 @@ module.exports = m = {
 
                 if (migratedForum || skippedForum) {
                     logger.info('[c:' + count + '] forum: ' + _ofid + ' already processed, destiny: ' + (migratedForum ? 'migrated' : 'skipped'));
-                    process.nextTick(done);
-                    // return;
+                    // todo hack!
+                    // process.nextTick is also crashing
+                    setTimeout(function(){
+                        done();
+                    }, 1);
                 } else {
                     logger.debug('[c:' + count + '] saving forum (aka category) : ' + forum.name);
 
