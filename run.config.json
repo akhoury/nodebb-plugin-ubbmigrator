@@ -25,7 +25,25 @@
 			"database": "ubb_test"
 		},
 
-		"tablePrefix": "ubbt_"
+		"tablePrefix": "ubbt_",
+
+		"timeMachine": {
+			"users": {
+				"after": null,
+				"before": 1104537600
+			},
+			"forums": {
+				"after": null,
+				"before": 1104537600
+			},
+			"topics": {
+				"after": null,
+				"before": 1104537600
+			},
+			"posts": {
+				"after": null,
+				"before": 1104537600
+			}
 	},
 
 	"nbb": {
