@@ -290,9 +290,9 @@ module.exports = m = {
 			logger.log('====  REMEMBER TO:\n'
 				+ '\n\t*-) Email all your users their new passwords, find them in the map file reported few lines up.'
 				+ '\n\t*-) Go through all users in the saved users map, each who has user.customPicture == true, test the image url if 200 or not, also filter the ones pointing to your old forum avatar dir, or keep that dir ([YOUR_UBB_PATH]/images/avatars/*) path working, your call'
-				+  (m.common.config.markdown ? '' : '\n\t*-) All of the posts and topics content are still in HTML, I will try to write a nbb plugin to consume those, otherwise, you would have to go through all the html content and Markdown it on your own.')
-				+ '\n\t*-) Create a nodebb-theme that works with your site\n'
-				+ '\n\t*-) I may write a NodeBB plugin to enforce one time use of temp passwords, if you beat me to it, let me know\n');
+				+  (m.common.config.markdown ? '' : '\n\t*-) All of the posts and topics content are still in HTML, you sould either  go through all the html content and Markdown it on your own or use this: https://github.com/akhoury/nodebb-plugin-sanitizehtml')
+				+ '\n\t*-) Create a nodebb-theme that works with your site'
+				+ '\n\t*-) I may write a NodeBB plugin to enforce one time use of temp passwords, if you beat me to it, let me know');
 
 			logger.info('DONE, Took ' + (((new Date()).getTime() - m.mem.startTime) / 1000 / 60).toFixed(2) + ' minutes.');
 			next();
