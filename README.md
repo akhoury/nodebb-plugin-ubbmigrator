@@ -1,7 +1,3 @@
-###No official release yet, this is a pre-alfa version.
-
-<br/>
-
 nodebb-plugin-ubbmigrator
 =========
 
@@ -12,7 +8,7 @@ UBB to NodeBB forum migrator, a one time use thing.
 ### What?
 This is a not a normal NodeBB Plugin, at the moment there is no way to run it from the NodeBB/admin panel, so it doesn't really matter
 if it's activated or not, as long as you find this readme somehow.
-you must install it in NodeBB/node_modules/nodebb-plugin-ubbmigrator, then you run it from the command line, for the time being.
+you must install it in NodeBB/node_modules/nodebb-plugin-ubbmigrator, then you run it from the command line, for the time being, keep reading to find out how
 
 ### What does it migrate:
 
@@ -64,7 +60,7 @@ read carefully:
 
 
 ## Versions tested on:
-  - UBB 7.5.7 ---> NodeBB 0.1.1
+  - UBB 7.5.7 ---> NodeBB 0.1.x-edge (I was almost daily updating from nodebb/master during development)
 
 ## Example usage
 ```bash
@@ -75,35 +71,32 @@ cd [wherever]/NodeBB/
 # to install nodebb dependencies
 npm install
 
-# not yet on npm but if it was
-# npm install nodebb-plugin-ubbmigrator
-# since it's not, you can do 
-cd ./node_modules/
-git clone https://github.com/akhoury/nodebb-plugin-ubbmigrator.git
+npm install nodebb-plugin-ubbmigrator
 
-cd nodebb-plugin-ubbmigrator
+cd node_modules/nodebb-plugin-ubbmigrator
 
 # edit your configs
-vim run.js
+vim run.config.json
 
 # then 
-node run.js --flush | gretee migration.log
+node run.js --flush
 # and hope for the best
 # I would grep the [useful] lines out stuff later, they're very useful for redirection purposes, getting users email/username/passwd to send them out etc..
+# node run.js --flush | tee migration.log | grep "[useful]" > useful.log
 # or you could find a gazillion file in the ./storage directory after the migration is done, and read them one by one.. up to you and/or your developer
 
 # !!!! the --flush flag WILL flush your NodeBB database, clears out all the temp storage from previous runs and starts fresh
 # do NOT use the --flush flag if you are attempting to resume after some failure or interruption
 
 ```
-### run.js with your configs
+### run.js, don't ask, I'll clean it up one day.
 ```javasript
 var migrator = require('./ubbmigrator.js'),
 	config = require('./run.config.json');
 
 migrator.common.migrate(config);
 ```
-### your config are required
+### Your config are required
 see [run.config.json](run.config.json), obviously I can't comment a JSON file, so I will here
 ```
 {
@@ -194,13 +187,18 @@ If you're an redis guru, you don't need my help, but take a look at it anyway an
 NodeBB uses Markdown for the user submitted content, UBB uses HTML, so,
 I tried to use an html-to-markdown converter, but it was a huge memory hog,
 was hitting segmentation faults and memory limits beyond 18k posts conversion,
-so I disbaled it, for the record I am using `html-md`. You can still enable it by setting `{ commom: { ..., markdown: true, ... } ... }` in the config.
-Having that said, if you leave it disabled, you still need to convert that content to Markdown somehow,
-but I'll let you do that. Or you can wait for me to write a NodeBB client-side plugin that will understands html content or something..
-or write your own, or submit another solution, I'm open for that, till then, expect to see html tags in the migrated post-contents and user signatures, if the markdown is disabled.
+so I disabled it, for the record I am using `html-md`. You can still enable it by setting `{ commom: { ..., markdown: true, ... } ... }` in the config.
+
+Having that said, if you leave it disabled, you still need to convert that content to Markdown somehow, OR you can use my earl version of
+[nodebb-plugin-sanitizehtml](https://github.com/akhoury/nodebb-plugin-sanitizehtml), BUT remember to TURN OFF the HTML sanitization on nodebb-plugin-markdown.
+
+
+## Limitations
+* UNIX only (Linux, Mac) but no Windows support yet
+* if very large forum, talking about 200k records and up, expect to wait hours, depending on your machine, also, you might need to hack and disable some things in NodeBB, temporarily. Can't figure out what yet, since NodeBB is highly active and unstable at the moment, but give me a buzz, I'll help you out.
 
 ### TODO
-* todo !!!!! HITTING MEMORY LIMITS OVER 18k POSTS IF MARKDOWNING IS TURNED ON !!
+* todo !!!!! HITTING MEMORY LIMITS OVER 18k POSTS IF MARKDOWNING IS TURNED ON !! FUCK it turn it off !!
 * todo maybe go through all users who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to my old forum avatar dir
 * todo still, make sure the old [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars
 * todo create a nodebb-theme that works with the site
