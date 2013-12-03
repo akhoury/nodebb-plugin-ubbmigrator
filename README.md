@@ -63,7 +63,7 @@ read carefully:
   - UBB 7.5.7 ---> NodeBB 0.1.x-edge (I was almost daily updating from nodebb/master during development)
 
 ## Example usage
-```bash
+```sh
 # that's your nodebb installation
 # I should not need to ask you to try this on a staging machine or locally first
 cd [wherever]/NodeBB/
@@ -88,6 +88,7 @@ node ubbmigrator.js --flush --config="config.json" --storage="/home/you/Desktop/
 
 # !!!! the --flush flag WILL flush your NodeBB database, clears out all the temp storage from previous runs and starts fresh
 # do NOT use the --flush flag if you are attempting to resume after some failure or interruption
+```
 
 ### Your config are required
 
