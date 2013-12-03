@@ -2,7 +2,7 @@
 	"common": {
 
 
-		"log": "sensitive,info,wran,error,debug",
+		"log": "useful,info,wran,error,debug",
 
 		"passwordGen": {
 			"chars": "!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890",
@@ -28,6 +28,7 @@
 		"tablePrefix": "ubbt_",
 
 		"timeMachine": {
+			"_comment": "using 'after' is very problematic, since dependencies may not exsits, such as a parent topic to a post, a user to a topic, or even a forum to a topic",
 			"users": {
 				"after": null,
 				"before": null,

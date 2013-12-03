@@ -232,10 +232,7 @@ module.exports = m = {
 					autoConfirmEmails: true,
 
 					moderatorAddedReputation: 1000,
-					adminAddedReputation: 1000,
-
-					moderatorsLikeGroupName: "GoldClub",
-					moderatorsLikeGroupDescription: "Previous migrated moderators"
+					adminAddedReputation: 1000
 
 				}, config.nbb);
 
@@ -891,24 +888,7 @@ module.exports = m = {
 			Group.getGidFromName('Administrators', function(err, gid) {
 				// save it
 				storage.setItem('nbb.groups.administrators.gid', gid);
-
-				// create an moderators group from the users who are ubb Moderators
-				Group.create(m.nbb.config.moderatorsLikeGroupName, m.nbb.config.moderatorsLikeGroupDescription, function(err, groupData) {
-					if (err) {
-						if (err.message == 'group-exists') {
-							Group.getGidFromName(m.nbb.config.moderatorsLikeGroupName, function(err, mgid){
-								// save it to use it when needed, bro
-								storage.setItem('nbb.groups.moderators.gid', mgid);
-								m.nbb.backupConfig(next);
-							});
-						}
-					} else {
-						// save it
-						storage.setItem("nbb.groups.moderators.gid", groupData.gid);
-						m.nbb.backupConfig(next);
-					}
-				});
-
+				m.nbb.backupConfig(next);
 			});
 		},
 
@@ -1076,10 +1056,8 @@ module.exports = m = {
 
 								if (user._level == 'Moderator') {
 									reputation = m.nbb.config.moderatorAddedReputation + user._rating;
-									Group.join(nbbModeratorsGid, uid, function() {
-										logger.info(user.username + ' just became a moderator on all categories');
-										m.nbb.makeModeratorOnAllCategories(uid);
-									});
+									logger.info(user.username + ' just became a moderator on all categories');
+									m.nbb.makeModeratorOnAllCategories(uid);
 								} else if (user._level == 'Administrator') {
 									reputation = m.nbb.config.adminAddedReputation + user._rating;
 									Group.join(nbbAdministratorsGid, uid, function(){
