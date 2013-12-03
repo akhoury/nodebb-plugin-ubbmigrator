@@ -107,6 +107,8 @@ see [config.json](config.json), obviously I can't neatly comment a JSON file, so
             // example: rewrite ^/MY_UBB_PATH/users/123(.*)$ /MY_NBB_PATH/user/elvis/$1 last;
             // this will be stdout as [info] per each record and also added to the report map.
             // I am not an nginx expert, but this should be enough for you if you are.
+            
+            // [EDIT]: there is relatively a better solution, see the Urls Redirect Note below
 
             rule: 'rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;'
         },
