@@ -187,20 +187,18 @@ I tried to use an html-to-markdown converter, but it was a huge memory hog,
 was hitting segmentation faults and memory limits beyond 18k posts conversion,
 so I disabled it, for the record I am using [html-md](https://github.com/neocotic/html.md). You can still enable it by setting `{ commom: { ..., markdown: true, ... } ... }` in the config.
 
+Having that said, if you leave it disabled, you still need to convert that content to Markdown somehow, OR you can use my early version of [nodebb-plugin-sanitizehtml](https://github.com/akhoury/nodebb-plugin-sanitizehtml), combined with [nodebb-plugin-markdown](https://github.com/julianlam/nodebb-plugin-markdown)
+BUT YOU MUST to TURN OFF the HTML sanitization on __nodebb-plugin-markdown__,
+and then activate __nodebb-plugin-sanitizehtml__ and let it do the less agressive, but still secure sanitization.
+
+
 ### Redirect Urls Note
 
 This migrator will spit out the nginx "rewrite rules" for each record, in a log messsage tagged [useful] if it's turned on, but it will also a file for EACH record (user/topic/forum/post) in the __storage__ directory. You can either ```grep``` the logs and clean them up as you wish, or iterate over these files in storage to build a map for all the ```[:oldid]: [:newIdOrSlug]```. When you build your map, you can use this [ubb-redirector](https://github.com/akhoury/ubb-redirector) to handle thre redirection of these urls (you may have to manually adjust your map, a 2 minutes of work), or use the built-in nginx  [HttpMapModule](http://wiki.nginx.org/HttpMapModule). If you decide to use straight out rule-by-rule nginx rewrite rules, not recommended, but you can, see the ```rule: 'rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;'``` in the config, you can edit that, but leave the ```${FROM}``` and the ```${TO}``` in there as the migrator will replace them with the correct values per each record (forum/topic/user/post).
 
 ### Users new generated passwords Note
 
-in the Redirect Urls Note above, I mentioned the storage files, and the [useful] tags, also these logs will spit out a JSON string for each user's ```_ouid``` (old user id), ```uid``` (new user id), ```email```, ```username```, and ```password```, so you or your developer can easily build a list of these emails with their usernames and passwords so you can send out the blast. If you decide to use the storage to build that list, look for u.* files, which are the users files appended with their old user id (```_ouid```).
-
-
-Having that said, if you leave it disabled, you still need to convert that content to Markdown somehow, OR you can use my early version of
-[nodebb-plugin-sanitizehtml](https://github.com/akhoury/nodebb-plugin-sanitizehtml),
-combined with [nodebb-plugin-markdown](https://github.com/julianlam/nodebb-plugin-markdown)
-BUT YOU MUST to TURN OFF the HTML sanitization on __nodebb-plugin-markdown__,
-and then activate __nodebb-plugin-sanitizehtml__ and let it do the less agressive, but still secure sanitization.
+in the [Redirect Urls Note](#redirect-urls-note) above, I mentioned the storage files, and the [useful] tags, also these logs will spit out a JSON string for each user's ```_ouid``` (old user id), ```uid``` (new user id), ```email```, ```username```, and ```password```, so you or your developer can easily build a list of these emails with their usernames and passwords so you can send out the blast. If you decide to use the storage to build that list, look for u.* files, which are the users files appended with their old user id (```_ouid```).
 
 
 ## Limitations
