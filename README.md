@@ -17,11 +17,11 @@ read carefully:
 - ####Users: 
     * __Username__ YES. if a user have an invalid username per NodeBB rules, the migrator will try to clean it, then test again, if that's still invalid, the migrator will test the UBB.User.UserDisplayName, if that doesn't work, this user will be skipped. UBB for some reason allows duplicate users with same emails? so the first ones by ID orders will be saved, the rest will be skipped. (UBB appends [username]_dup[Number] next to the dups.. so those will be skipped too if the email is already used)
     * __Passwords__ NO. UBB use MD5, NodeBB uses Sha1 I think, so can't do, the migrator will generate random passwords of length 13 and a set of characters (configurable), don't worry, the migrator will give out the clear text passwords in the report, so you can email them to your users, keep them safe.
-    * __Admins & Moderators__: YES. Admins will stay Admins, and Moderators will stay Moderators, the catch here though is that each moderator is a moderator on ALL of the categories, since I didn't find anywhere UBB separating these powers. Also, NodeBB uses reputation for moderators access, so what I do here by default, is explicitly add reputation points, NodeBB default is 1000 (configurable to 0 if you want) + UBB.User.rating (to keep the karma). Hopefully soon you will be able to edit the Moderators easily via the NodeBB/admin.
+    * __Admins & Moderators__: YES. Admins will stay Admins, and Moderators will stay Moderators, the catch here though is that each moderator is a moderator on ALL of the categories, since I didn't find anywhere UBB separating these powers. Hopefully soon you will be able to edit the Moderators easily via the NodeBB/admin.
     * __Joindate__ YES.
     * __Website__ YES. if URL looks valid, it is migrated, but it's not checked if 404s 
     * __Avatar__ YES. if URL looks valid, it is migrated, but it's not checked if 404s, if not valid, it's set to "" and NodeBB will generate a gravatar URl for the user, but the migrator will also add an attribute `user.customPicture = true` in the generated map if you'd like to make sure the URLs are 200s, you can iterate over them.
-    * __Reputation__ SORT-OF. assumed the UBB.User.raking (Moderators and Admins get extra points)
+    * __Reputation__ SORT-OF. assumed as the UBB.User.raking * 5 (by default) to boost the Karma !! (it's configurable)
     * __Location__ YES. migrated as is, clear text
     * __Signature__ YES. migrated as is (HTML -- __read the Markdown note below__)
     * __Banned__ YES. it will stay banned, by username
@@ -76,10 +76,11 @@ npm install nodebb-plugin-ubbmigrator
 cd node_modules/nodebb-plugin-ubbmigrator
 
 # edit your configs
-vim run.config.json
+vim config.json
 
 # then 
-node run.js --flush
+node ubbmigrator.js --flush --config="config.json" --storage="/home/you/Desktop/there" --log="useful,info,warn,debug,error"
+
 # and hope for the best
 # I would grep the [useful] lines out stuff later, they're very useful for redirection purposes, getting users email/username/passwd to send them out etc..
 # node run.js --flush | tee migration.log | grep "[useful]" > useful.log
@@ -97,7 +98,7 @@ var migrator = require('./ubbmigrator.js'),
 migrator.common.migrate(config);
 ```
 ### Your config are required
-see [run.config.json](run.config.json), obviously I can't comment a JSON file, so I will here
+see [config.json](config.json), obviously I can't neatly comment a JSON file, so I will here
 ```
 {
     // common configs

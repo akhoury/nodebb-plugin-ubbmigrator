@@ -2,7 +2,7 @@
 
 var Group, Meta, User, Topics, Posts, Categories, RDB;
 
-// todo: the plugins page says to use this 'var User = module.parent.require('./user');' but that's not working for some reason
+// activated or not, still works IF it's in NodeBB/node_modules/nodebb-plugin-ubbmigrator
 try {
 	Group = module.parent.require('./groups.js');
 	Meta = module.parent.require('./meta.js');
@@ -40,7 +40,7 @@ var
 // I'm lazy
 	$ = require('jquery'),
 	async = require('async'),
-	fs = require('fs.extra'),
+	fs = require('fs-extra'),
 	path = require('path'),
 	http = require('http'),
 	argv = require('optimist').argv,
@@ -52,7 +52,7 @@ var
 // later to be initialized with config in init()
 	logger, m;
 
-module.exports = m = {
+m = {
 
 	common: {
 
@@ -173,27 +173,30 @@ module.exports = m = {
 					// ubb default, I think
 					tablePrefix: 'ubbt_',
 
+
+
 					// Limit ubb queries to certain time frames
 					// timestamp in SECONDS
 					// this is potentially problematic,
 					// since you can't migrate a topic or post that was created by a user who you wish not to migrate
-					// I wouldn't use that, maybe for testing .. like limit your migration to pre 2005 to test it out quick, like I do
+					// I wouldn't use that, maybe for testing .. such as limiting your migration to pre 2004 or something to test it out quick, like I do
 					timeMachine: {
+						// using 'after' is very problematic, since dependencies may not exsits, such as a parent topic to a post, a user to a topic, or even a forum to a topic
 						users: {
 							after: null,
-							before: 1042918861
+							before: null
 						},
 						forums: {
 							after: null,
-							before: 1042918861
+							before: null
 						},
 						topics: {
 							after: null,
-							before: 1042918861
+							before: null
 						},
 						posts: {
 							after: null,
-							before: 1042918861
+							before: null
 						}
 					}
 				}
@@ -231,17 +234,24 @@ module.exports = m = {
 					// if you want to auto confirm the user's accounts..
 					autoConfirmEmails: true,
 
-					moderatorAddedReputation: 1000,
-					adminAddedReputation: 1000
+					userReputationMultiplier: 5
 
 				}, config.nbb);
 
+			// you can override the log by using something like --log="debug"
+			m.common.config.log = argv.l || argv.log || m.common.config.log;
 			logger = Logger.init(m.common.config.log);
 			logger.debug('init()');
 
-			m.common.config.storageDir = path.resolve(m.common.config.storageDir);
-
+			m.common.config.storageDir = path.normalize(argv.s || argv.storage || m.common.config.storageDir);
 			logger.debug("Storage directory is: " + m.common.config.storageDir);
+
+			// dev purposes, must be valid JSON
+			try {
+				m.ubb.config.timeMachine = JSON.parse(argv.t || argv.time || JSON.stringify(m.ubb.config.timeMachine));
+			} catch (e) {
+				logger.debug("couldn't parse the --time flag value");
+			}
 
 			if (m.nbb.config.resetup.flush) {
 				logger.info("Clearing out the storage from previous run, please be patient...");
@@ -1052,19 +1062,13 @@ module.exports = m = {
 								}, 1);
 							} else {
 
-								var reputation = 0;
-
 								if (user._level == 'Moderator') {
-									reputation = m.nbb.config.moderatorAddedReputation + user._rating;
 									logger.info(user.username + ' just became a moderator on all categories');
 									m.nbb.makeModeratorOnAllCategories(uid);
 								} else if (user._level == 'Administrator') {
-									reputation = m.nbb.config.adminAddedReputation + user._rating;
 									Group.join(nbbAdministratorsGid, uid, function(){
 										logger.info(user.username + ' became an Administrator');
 									});
-								} else {
-									reputation = user._rating || 0;
 								}
 
 								// set some of the fields got from the ubb
@@ -1079,7 +1083,7 @@ module.exports = m = {
 									// preserse the  joindate, luckily here, ubb uses timestamps too
 									joindate: user._joindate,
 									// that's the best I could come up with I guess
-									reputation: reputation || 0,
+									reputation: (user._rating || 0) * m.nbb.config.userReputationMultiplier,
 									profileviews: user._totalRates || 0
 								};
 
@@ -1288,3 +1292,5 @@ module.exports = m = {
 		}
 	}
 };
+
+m.common.migrate(fs.readJsonSync(argv.c || argv.config || './config.json'));
