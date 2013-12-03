@@ -23,10 +23,10 @@ read carefully:
     * __Avatar__ YES. if URL looks valid, it is migrated, but it's not checked if 404s, if not valid, it's set to "" and NodeBB will generate a gravatar URl for the user, but the migrator will also add an attribute `user.customPicture = true` in the generated map if you'd like to make sure the URLs are 200s, you can iterate over them.
     * __Reputation__ SORT-OF. assumed as the UBB.User.raking * 5 (by default) to boost the Karma !! (it's configurable)
     * __Location__ YES. migrated as is, clear text
-    * __Signature__ YES. migrated as is (HTML -- __read the Markdown note below__)
+    * __Signature__ YES. migrated as is (HTML -- read the Markdown note below)
     * __Banned__ YES. it will stay banned, by username
     * __Confimartion emails__? there is an option for this migrator (look in the configs) `nbbAutoConfirmEmails = true/false` which will try to prevent the confirmation email from sending out, and will explicitly set the accounts to verified in NodeBB.
-    * __Nginx RedirectRules__ YES. per each user's profile for your convience, see Redirect Urls Note find out more.
+    * __Nginx RedirectRules__ YES. per each user's profile for your convience, read the [Redirect Urls Note](#redirect-urls-note) to find out more.
     * __Oh and__, UBB have a weird User with ID == 1, ******DONOTDELETE****** <= that's like the first user created, and somehow, in my UBB installation, it does own few topics and posts, so these will be assigned to the NodeBB initial Admin created. 
 
 
@@ -36,25 +36,25 @@ read carefully:
     * __description__: YES
     * __Order__: per FORUM_ID order, you can reorder those later
     * __NodeBB Icon__: they all get the comment icon for now, you can change them later
-    * __Nginx RedirectRule__ YES. per each forum's url, for your convenience, Redirect Urls Note to find out more.
+    * __Nginx RedirectRule__ YES. per each forum's url, for your convenience, read the [Redirect Urls Note](#redirect-urls-note) to find out more.
 
 
 - ####Topics:
     * __Within its Forum (aka Category)__ YES (but if its parent forum is skipped, this topic gets skipped)
     * __Owned by its User__ YES (but if its user is skipped, this topic gets skipped)
     * __Title__ YES
-    * __Content__ YES (HTML - __Read the Markdown Note below__)
+    * __Content__ YES (HTML - read the Markdown Note below)
     * __DateTime__ YES
     * __Pinned__ YES (I don't know how many you can pin in NodeBB)
     * __ViewCount__ YES
-    * __Nginx RedirectRule__ YES. per each forum's url, for your convenience, Redirect Urls Note to find out more.
+    * __Nginx RedirectRule__ YES. per each forum's url, for your convenience, read the [Redirect Urls Note](#redirect-urls-note) to find out more.
 
 
 - ####Posts:
     * __Within its Forum (aka Category)__ YES (but if its grand-parent forum is skipped, its parent topic gets skipped, hence this post gets skipped)
     * __Within its Topic__ YES (but if its parent topic is skipped, this post gets skipped)
     * __Owned by its User__ YES (but if its user is skipped, this post is skipped)
-    * __Content__ YES (HTML - __Read the Markdown Note below__)
+    * __Content__ YES (HTML - read the Markdown Note below)
     * __DateTime__ YES
     * __Nginx RedirectRule__ SORT-OF, every UBB.Post URL basically points to its Parent-Topic's URL with a `ubbthreads.php/topic/123/#Post456789`, I don't think there is an easy way for for nginx to capture the # values, without some Client-Side JavaScript involved, BUT I generate the rule anyway, so you can have a mapping from the UBB posts to the NBB posts. And if you find a solution, please share. The good news is even if you ignore this and you just redirect the old topics, all the OLD POSTS URLS WILL land at the correct NEW TOPIC.
 
