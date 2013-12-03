@@ -235,7 +235,7 @@ m = {
 					autoConfirmEmails: true,
 
 					userReputationMultiplier: 5
-
+					
 				}, config.nbb);
 
 			// you can override the log by using something like --log="debug"
@@ -247,6 +247,8 @@ m = {
 			logger.debug("Storage directory is: " + m.common.config.storageDir);
 
 			// dev purposes, must be valid JSON
+			// brotip: i use it like dis
+			// node ubbmigrator.js --flush --storage="$HOME/Desktop/storage" --log="debug,sensitive,info,warn,error" --time="{\"users\":{\"before\":1004537600},\"forums\":{\"before\":1004537600},\"topics\":{\"before\":1004537600},\"posts\":{\"before\":1004537600}}"
 			try {
 				m.ubb.config.timeMachine = JSON.parse(argv.t || argv.time || JSON.stringify(m.ubb.config.timeMachine));
 			} catch (e) {
@@ -301,6 +303,8 @@ m = {
 				+ '\n\t*-) Create a nodebb-theme that works with your site'
 				+ '\n\t*-) I may write a NodeBB plugin to enforce one time use of temp passwords, if you beat me to it, let me know');
 
+			logger.log('\n\nFind a gazillion file (for your redirection maps and user\'s new passwords) in: ' + m.common.config.storageDir + '\n');
+			logger.log('These files have a pattern u.[_ouid], f.[_ofid], t.[_otid], p.[_opid], \'cat\' one of each to view the structure.\n');
 			logger.info('DONE, Took ' + (((new Date()).getTime() - m.mem.startTime) / 1000 / 60).toFixed(2) + ' minutes.');
 			next();
 		},
