@@ -16,14 +16,14 @@ read carefully:
 
 - ####Users: 
     * __Username__ YES. if a user have an invalid username per NodeBB rules, the migrator will try to clean it, then test again, if that's still invalid, the migrator will test the UBB.User.UserDisplayName, if that doesn't work, this user will be skipped. UBB for some reason allows duplicate users with same emails? so the first ones by ID orders will be saved, the rest will be skipped. (UBB appends [username]_dup[Number] next to the dups.. so those will be skipped too if the email is already used)
-    * __Passwords__ NO. UBB use MD5, NodeBB uses Sha1 I think, so can't do, the migrator will generate random passwords of length 13 and a set of characters (configurable), don't worry, the migrator will give out the clear text passwords in the report, so you can email them to your users, keep them safe.
+    * __Passwords__ NO. UBB use MD5, NodeBB uses Sha1 I think, so can't do, the migrator will generate random passwords of length 13 and a set of characters (configurable), don't worry, the migrator will give out the clear text passwords in the report, so you can email them to your users, keep them safe. Read the [Users new generated passwords Note](#users-new-generated-passwords-note) for more details.
     * __Admins & Moderators__: YES. Admins will stay Admins, and Moderators will stay Moderators, the catch here though is that each moderator is a moderator on ALL of the categories, since I didn't find anywhere UBB separating these powers. Hopefully soon you will be able to edit the Moderators easily via the NodeBB/admin.
     * __Joindate__ YES.
     * __Website__ YES. if URL looks valid, it is migrated, but it's not checked if 404s 
     * __Avatar__ YES. if URL looks valid, it is migrated, but it's not checked if 404s, if not valid, it's set to "" and NodeBB will generate a gravatar URl for the user, but the migrator will also add an attribute `user.customPicture = true` in the generated map if you'd like to make sure the URLs are 200s, you can iterate over them.
     * __Reputation__ SORT-OF. assumed as the UBB.User.raking * 5 (by default) to boost the Karma !! (it's configurable)
     * __Location__ YES. migrated as is, clear text
-    * __Signature__ YES. migrated as is (HTML -- read the Markdown note below)
+    * __Signature__ YES. migrated as is (HTML -- read the [Markdown note](#markdown-note) below)
     * __Banned__ YES. it will stay banned, by username
     * __Confimartion emails__? there is an option for this migrator (look in the configs) `nbbAutoConfirmEmails = true/false` which will try to prevent the confirmation email from sending out, and will explicitly set the accounts to verified in NodeBB.
     * __Nginx RedirectRules__ YES. per each user's profile for your convience, read the [Redirect Urls Note](#redirect-urls-note) to find out more.
@@ -43,7 +43,7 @@ read carefully:
     * __Within its Forum (aka Category)__ YES (but if its parent forum is skipped, this topic gets skipped)
     * __Owned by its User__ YES (but if its user is skipped, this topic gets skipped)
     * __Title__ YES
-    * __Content__ YES (HTML - read the Markdown Note below)
+    * __Content__ YES (HTML - read the [Markdown Note](#markdown-note) below)
     * __DateTime__ YES
     * __Pinned__ YES (I don't know how many you can pin in NodeBB)
     * __ViewCount__ YES
@@ -54,7 +54,7 @@ read carefully:
     * __Within its Forum (aka Category)__ YES (but if its grand-parent forum is skipped, its parent topic gets skipped, hence this post gets skipped)
     * __Within its Topic__ YES (but if its parent topic is skipped, this post gets skipped)
     * __Owned by its User__ YES (but if its user is skipped, this post is skipped)
-    * __Content__ YES (HTML - read the Markdown Note below)
+    * __Content__ YES (HTML - read the [Markdown Note](#markdown-note) below)
     * __DateTime__ YES
     * __Nginx RedirectRule__ SORT-OF, every UBB.Post URL basically points to its Parent-Topic's URL with a `ubbthreads.php/topic/123/#Post456789`, I don't think there is an easy way for for nginx to capture the # values, without some Client-Side JavaScript involved, BUT I generate the rule anyway, so you can have a mapping from the UBB posts to the NBB posts. And if you find a solution, please share. The good news is even if you ignore this and you just redirect the old topics, all the OLD POSTS URLS WILL land at the correct NEW TOPIC.
 
