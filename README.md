@@ -26,7 +26,7 @@ read carefully:
     * __Signature__ YES. migrated as is (HTML -- __read the Markdown note below__)
     * __Banned__ YES. it will stay banned, by username
     * __Confimartion emails__? there is an option for this migrator (look in the configs) `nbbAutoConfirmEmails = true/false` which will try to prevent the confirmation email from sending out, and will explicitly set the accounts to verified in NodeBB.
-    * __Nginx RedirectRules__ YES. per each user's profile for your convience, see the configs to find out more.
+    * __Nginx RedirectRules__ YES. per each user's profile for your convience, see Redirect Urls Note find out more.
     * __Oh and__, UBB have a weird User with ID == 1, ******DONOTDELETE****** <= that's like the first user created, and somehow, in my UBB installation, it does own few topics and posts, so these will be assigned to the NodeBB initial Admin created. 
 
 
@@ -36,7 +36,7 @@ read carefully:
     * __description__: YES
     * __Order__: per FORUM_ID order, you can reorder those later
     * __NodeBB Icon__: they all get the comment icon for now, you can change them later
-    * __Nginx RedirectRule__ YES. per each forum's url, for your convenience, see the configs to find out more.
+    * __Nginx RedirectRule__ YES. per each forum's url, for your convenience, Redirect Urls Note to find out more.
 
 
 - ####Topics:
@@ -47,7 +47,7 @@ read carefully:
     * __DateTime__ YES
     * __Pinned__ YES (I don't know how many you can pin in NodeBB)
     * __ViewCount__ YES
-    * __Nginx RedirectRule__ YES. per each forum's url, for your convenience, see the configs to find out more.
+    * __Nginx RedirectRule__ YES. per each forum's url, for your convenience, Redirect Urls Note to find out more.
 
 
 - ####Posts:
@@ -56,7 +56,7 @@ read carefully:
     * __Owned by its User__ YES (but if its user is skipped, this post is skipped)
     * __Content__ YES (HTML - __Read the Markdown Note below__)
     * __DateTime__ YES
-    * __Nginx RedirectRule__ SORT-OF, every UBB.Post URL basically points to its Parent-Topic's URL with a `ubbthreads.php/topic/123/#Post456789`, I don't think there is an easy way for for nginx to capture the # values, without some Client-Side JavaScript involved, BUT I generate the rule anyway, so you can have a mapping from the UBB posts to the NBB posts. And if you find a solution, please share. 
+    * __Nginx RedirectRule__ SORT-OF, every UBB.Post URL basically points to its Parent-Topic's URL with a `ubbthreads.php/topic/123/#Post456789`, I don't think there is an easy way for for nginx to capture the # values, without some Client-Side JavaScript involved, BUT I generate the rule anyway, so you can have a mapping from the UBB posts to the NBB posts. And if you find a solution, please share. The good news is even if you ignore this and you just redirect the old topics, all the OLD POSTS URLS WILL land at the correct NEW TOPIC.
 
 
 ## Versions tested on:
@@ -186,6 +186,15 @@ NodeBB uses Markdown for the user submitted content, UBB uses HTML, so,
 I tried to use an html-to-markdown converter, but it was a huge memory hog,
 was hitting segmentation faults and memory limits beyond 18k posts conversion,
 so I disabled it, for the record I am using [html-md](https://github.com/neocotic/html.md). You can still enable it by setting `{ commom: { ..., markdown: true, ... } ... }` in the config.
+
+### Redirect Urls Note
+
+This migrator will spit out the nginx "rewrite rules" for each record, in a log messsage tagged [useful] if it's turned on, but it will also a file for EACH record (user/topic/forum/post) in the __storage__ directory. You can either ```grep``` the logs and clean them up as you wish, or iterate over these files in storage to build a map for all the ```[:oldid]: [:newIdOrSlug]```. When you build your map, you can use this [ubb-redirector](https://github.com/akhoury/ubb-redirector) to handle thre redirection of these urls (you may have to manually adjust your map, a 2 minutes of work), or use the built-in nginx  [HttpMapModule](http://wiki.nginx.org/HttpMapModule). If you decide to use straight out rule-by-rule nginx rewrite rules, not recommended, but you can, see the ```rule: 'rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;'``` in the config, you can edit that, but leave the ```${FROM}``` and the ```${TO}``` in there as the migrator will replace them with the correct values per each record (forum/topic/user/post).
+
+### Users new generated passwords Note
+
+in the Redirect Urls Note above, I mentioned the storage files, and the [useful] tags, also these logs will spit out a JSON string for each user's ```_ouid``` (old user id), ```uid``` (new user id), ```email```, ```username```, and ```password```, so you or your developer can easily build a list of these emails with their usernames and passwords so you can send out the blast. If you decide to use the storage to build that list, look for u.* files, which are the users files appended with their old user id (```_ouid```).
+
 
 Having that said, if you leave it disabled, you still need to convert that content to Markdown somehow, OR you can use my early version of
 [nodebb-plugin-sanitizehtml](https://github.com/akhoury/nodebb-plugin-sanitizehtml),
