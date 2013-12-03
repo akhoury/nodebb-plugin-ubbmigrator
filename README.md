@@ -90,8 +90,10 @@ node ubbmigrator.js --flush --config="config.json" --storage="/home/you/Desktop/
 # do NOT use the --flush flag if you are attempting to resume after some failure or interruption
 
 ### Your config are required
+
 see [config.json](config.json), obviously I can't neatly comment a JSON file, so I will here
-```
+
+```javascript
 {
     // common configs
     common: {
