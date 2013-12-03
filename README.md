@@ -209,7 +209,7 @@ and then activate __nodebb-plugin-sanitizehtml__ and let it do the less agressiv
 
 ### Terminology
 
-* 'NodeBB' == 'nbb' ==  'Nbb' == 'NBB' as a terminology
+* 'NodeBB' == 'nbb' ==  'Nbb' == 'NBB' as a terminology, which a new [NodeJS](http://nodejs.org/) based Forum Software, [check it out](http://nodebb.org/)
 * 'ubb' == 'UBB' == 'Ubb' means the UBB Threads Forum Software, here's a link => [ubbcentral.com](http://www.ubbcentral.com)
 * '_ouid' == 'Old user id' the UBB user id
 * 'uid' == 'User id' the NodeBB uid
@@ -219,8 +219,7 @@ and then activate __nodebb-plugin-sanitizehtml__ and let it do the less agressiv
 * 'tid' == 'Topic id' NodeBB Topic id
 * '_opid' == 'Old post id' UBB Post id
 * 'pid' == 'Post id' NodeBB post id
-* '_variablename' meaning every variable/property/key that starts with an '_' is probably a UBB variable, before it got normalized, after normalziation, it will loose the '_' and probably change name, i.e. _userPicture --> avatar
-
+* every variable/property/key that starts with an __underscore__ such as ```_username``` is probably a UBB variable, before it got normalized, after normalization, it will loose the __underscore__ and probably change name, i.e. ```_userPicture --> avatar```
 
 
     
