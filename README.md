@@ -35,26 +35,26 @@ read carefully:
     * __Title__ YES
     * __description__: YES
     * __Order__: per FORUM_ID order, you can reorder those later
-    * __NodeBB Icon__: they all get the comment icon for noww, you can change them later
-    * __Nginx RedirectRule__ YES. per each forum's url, for your convience, see the configs to find out more.
+    * __NodeBB Icon__: they all get the comment icon for now, you can change them later
+    * __Nginx RedirectRule__ YES. per each forum's url, for your convenience, see the configs to find out more.
 
 
 - ####Topics:
     * __Within its Forum (aka Category)__ YES (but if its parent forum is skipped, this topic gets skipped)
     * __Owned by its User__ YES (but if its user is skipped, this topic gets skipped)
     * __Title__ YES
-    * __Content__ YES (HTML - Read the Markdown Note)
+    * __Content__ YES (HTML - __Read the Markdown Note below__)
     * __DateTime__ YES
     * __Pinned__ YES (I don't know how many you can pin in NodeBB)
     * __ViewCount__ YES
-    * __Nginx RedirectRule__ YES. per each forum's url, for your convience, see the configs to find out more.
+    * __Nginx RedirectRule__ YES. per each forum's url, for your convenience, see the configs to find out more.
 
 
 - ####Posts:
     * __Within its Forum (aka Category)__ YES (but if its grand-parent forum is skipped, its parent topic gets skipped, hence this post gets skipped)
     * __Within its Topic__ YES (but if its parent topic is skipped, this post gets skipped)
     * __Owned by its User__ YES (but if its user is skipped, this post is skipped)
-    * __Content__ YES (HTML - Read the Markdown Note)
+    * __Content__ YES (HTML - __Read the Markdown Note below__)
     * __DateTime__ YES
     * __Nginx RedirectRule__ SORT-OF, every UBB.Post URL basically points to its Parent-Topic's URL with a `ubbthreads.php/topic/123/#Post456789`, I don't think there is an easy way for for nginx to capture the # values, without some Client-Side JavaScript involved, BUT I generate the rule anyway, so you can have a mapping from the UBB posts to the NBB posts. And if you find a solution, please share. 
 
@@ -89,14 +89,6 @@ node ubbmigrator.js --flush --config="config.json" --storage="/home/you/Desktop/
 # !!!! the --flush flag WILL flush your NodeBB database, clears out all the temp storage from previous runs and starts fresh
 # do NOT use the --flush flag if you are attempting to resume after some failure or interruption
 
-```
-### run.js, don't ask, I'll clean it up one day.
-```javasript
-var migrator = require('./ubbmigrator.js'),
-	config = require('./run.config.json');
-
-migrator.common.migrate(config);
-```
 ### Your config are required
 see [config.json](config.json), obviously I can't neatly comment a JSON file, so I will here
 ```
@@ -164,7 +156,9 @@ see [config.json](config.json), obviously I can't neatly comment a JSON file, so
         // this will set the nodebb 'email:*:confirm' records to true
         // and will del all the 'confirm:*KEYS*:emails' too
         // if you want to auto confirm the user's accounts..
-        autoConfirmEmails: true
+        autoConfirmEmails: true,
+
+        userReputationMultiplier: 5
     }
 
     // there is few more if you're interested, look in the source
@@ -188,15 +182,18 @@ If you're an redis guru, you don't need my help, but take a look at it anyway an
 NodeBB uses Markdown for the user submitted content, UBB uses HTML, so,
 I tried to use an html-to-markdown converter, but it was a huge memory hog,
 was hitting segmentation faults and memory limits beyond 18k posts conversion,
-so I disabled it, for the record I am using `html-md`. You can still enable it by setting `{ commom: { ..., markdown: true, ... } ... }` in the config.
+so I disabled it, for the record I am using [html-md](https://github.com/neocotic/html.md). You can still enable it by setting `{ commom: { ..., markdown: true, ... } ... }` in the config.
 
-Having that said, if you leave it disabled, you still need to convert that content to Markdown somehow, OR you can use my earl version of
-[nodebb-plugin-sanitizehtml](https://github.com/akhoury/nodebb-plugin-sanitizehtml), BUT remember to TURN OFF the HTML sanitization on nodebb-plugin-markdown.
+Having that said, if you leave it disabled, you still need to convert that content to Markdown somehow, OR you can use my early version of
+[nodebb-plugin-sanitizehtml](https://github.com/akhoury/nodebb-plugin-sanitizehtml),
+combined with [nodebb-plugin-markdown](https://github.com/julianlam/nodebb-plugin-markdown)
+BUT YOU MUST to TURN OFF the HTML sanitization on __nodebb-plugin-markdown__,
+and then activate __nodebb-plugin-sanitizehtml__ and let it do the less agressive, but still secure sanitization.
 
 
 ## Limitations
-* UNIX only (Linux, Mac) but no Windows support yet
-* if very large forum, talking about 200k records and up, expect to wait hours, depending on your machine, also, you might need to hack and disable some things in NodeBB, temporarily. Can't figure out what yet, since NodeBB is highly active and unstable at the moment, but give me a buzz, I'll help you out.
+* UNIX only (Linux, Mac) but no Windows support yet, it's one a time use, I probably won't support Windows soon.
+* If you're migrating very large forum, I'm talking about 200k records and up, expect to wait hours, depending on your machine, but, you might need to hack and disable some things in NodeBB, temporarily. Can't figure out what yet, since NodeBB is highly active and unstable at the moment, but give me a buzz, I'll help you out. once the next stable version comes out, I will stabilize this migrator.
 
 ### TODO
 * todo !!!!! HITTING MEMORY LIMITS OVER 18k POSTS IF MARKDOWNING IS TURNED ON !! FUCK it turn it off !!
