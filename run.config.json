@@ -30,19 +30,20 @@
 		"timeMachine": {
 			"users": {
 				"after": null,
-				"before": null //1004537600
+				"before": null,
+				"_comment": " a sample timestamp 1004537600"
 			},
 			"forums": {
 				"after": null,
-				"before": null // 1004537600
+				"before": null
 			},
 			"topics": {
 				"after": null,
-				"before": null //1004537600
+				"before": null
 			},
 			"posts": {
 				"after": null,
-				"before": null // 1004537600
+				"before": null
 			}
 		}
 	},

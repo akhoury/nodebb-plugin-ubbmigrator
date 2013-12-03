@@ -949,10 +949,17 @@ module.exports = m = {
 
 		// aka forums
 		makeModeratorOnAllCategories: function(uid){
+			console.log(m.mem._ofids);
 			m.mem._ofids.forEach(function(_ofid) {
 				var forum = storage.getItem('f.' + _ofid);
-				if (forum && forum.cid)
-					RDB.sadd('cid:' + forum.cid + ':moderators', uid);
+				console.log(forum);
+				if (forum && forum.migrated) {
+					console.log('cid:' + forum.migrated.cid + ':moderators' + " <-- " + uid);
+					RDB.sadd('cid:' + forum.migrated.cid + ':moderators', uid, function(err){
+						if (err)
+							logger.error(err);
+					});
+				}
 			});
 		},
 
