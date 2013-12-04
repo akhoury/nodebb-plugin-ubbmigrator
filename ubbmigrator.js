@@ -138,7 +138,7 @@ m = {
 					// generate passwords for the users, yea
 					passwordGen: {
 						// chars selection menu
-						chars: '!@#$?)({}*.^qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890',
+						chars: '{}.-_=+qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890',
 						// password length
 						len: 13
 					},
@@ -156,7 +156,11 @@ m = {
 
 					storageDir: path.join(__dirname,  './storage'),
 
-					markdown: false
+					markdown: false,
+
+					// generate ubbRedictorMap ?
+					// to work with this https://github.com/akhoury/ubb-redirector
+					genUbbRedirectorMap: null
 				}
 				, config.common);
 
@@ -235,7 +239,7 @@ m = {
 					autoConfirmEmails: true,
 
 					userReputationMultiplier: 5
-					
+
 				}, config.nbb);
 
 			// you can override the log by using something like --log="debug"
@@ -248,7 +252,7 @@ m = {
 
 			// dev purposes, must be valid JSON
 			// brotip: i use it like dis
-			// node ubbmigrator.js --flush --storage="$HOME/Desktop/storage" --log="debug,sensitive,info,warn,error" --time="{\"users\":{\"before\":1004537600},\"forums\":{\"before\":1004537600},\"topics\":{\"before\":1004537600},\"posts\":{\"before\":1004537600}}"
+			// node ubbmigrator.js --flush --storage="$HOME/Desktop/storage" --log="debug" --ubbredirector --time="{\"users\":{\"before\":1004537600},\"forums\":{\"before\":1004537600},\"topics\":{\"before\":1004537600},\"posts\":{\"before\":1004537600}}"
 			try {
 				m.ubb.config.timeMachine = JSON.parse(argv.t || argv.time || JSON.stringify(m.ubb.config.timeMachine));
 			} catch (e) {
@@ -283,6 +287,44 @@ m = {
 			m.ubb.connection = mysql.createConnection(m.ubb.config.db);
 			m.ubb.connection.connect();
 
+			m.common.config.genUbbRedirectorMap = argv["ubbredirector"] || m.common.config.genUbbRedirectorMap ? true : null;
+			if (m.common.config.genUbbRedirectorMap) {
+				m.mem.ubbRedirectorMap = {
+					_comment: "see https://github.com/akhoury/ubb-redirector",
+
+					newSiteRootUrl: "forums.example.com",
+					newRootPath: "",
+
+					hard: {
+						newPrefix: "",
+						map: {
+							"An_Example_Of_UBB_Old_Hardcoded_Path": "to_New_Harcoded_Path--see _comment key for readme"
+						}
+					},
+
+					forums: {
+						prefix: "You Need To Set That -- see _comment key for readme",
+						// map will be filled automatically
+						map: {}
+					},
+
+					topics: {
+						prefix: "You Need To Set That -- see _comment key for readme",
+						// map will be filled automatically
+						map: {}
+					},
+
+					users: {
+						prefix: "You Need To Set That -- see _comment key for readme",
+						// map will be filled automatically
+						map: {}
+					}
+
+					// why isn't there any posts? because they each belong in a topic and they cannot be redirected easily, see readme
+					// but still each OLD post URL will be redirected correctly to its parent Topic, which is not a bad deal
+				}
+			}
+
 			if (argv.flush || argv.f)
 				m.nbb.config.resetup.flush = true;
 
@@ -296,7 +338,7 @@ m = {
 
 		report: function(next) {
 
-			logger.log('====  REMEMBER TO:\n'
+			logger.log('\n\n====  REMEMBER TO:\n'
 				+ '\n\t*-) Email all your users their new passwords, find them in the map file reported few lines up.'
 				+ '\n\t*-) Go through all users in the saved users map, each who has user.customPicture == true, test the image url if 200 or not, also filter the ones pointing to your old forum avatar dir, or keep that dir ([YOUR_UBB_PATH]/images/avatars/*) path working, your call'
 				+  (m.common.config.markdown ? '' : '\n\t*-) All of the posts and topics content are still in HTML, you sould either  go through all the html content and Markdown it on your own or use this: https://github.com/akhoury/nodebb-plugin-sanitizehtml')
@@ -305,6 +347,8 @@ m = {
 
 			logger.log('\n\nFind a gazillion file (for your redirection maps and user\'s new passwords) in: ' + m.common.config.storageDir + '\n');
 			logger.log('These files have a pattern u.[_ouid], f.[_ofid], t.[_otid], p.[_opid], \'cat\' one of each to view the structure.\n');
+			logger.log('----> Or if you saved these stdout logs, look for [user-json] or [user-csv] to find all the users mapping.\n');
+			logger.log('----> And if you used the --ubbredirector flag, you can find a mapping for your redirects in: ' +  m.common.config.storageDir + '/ubbRedirectorMap.json' + '\n');
 			logger.info('DONE, Took ' + (((new Date()).getTime() - m.mem.startTime) / 1000 / 60).toFixed(2) + ' minutes.');
 			next();
 		},
@@ -313,6 +357,11 @@ m = {
 			var res = m.common.config.nginx.rule.replace('${FROM}', from).replace('${TO}', to);
 			logger.useful(res);
 			return res;
+		},
+
+		setUbbRedirectorKey: function(key, oid, nIdSlug) {
+			if (m.common.config.genUbbRedirectorMap)
+				m.mem.ubbRedirectorMap[key].map[oid] = nIdSlug;
 		},
 
 		exit: function(code, msg){
@@ -908,9 +957,8 @@ m = {
 			RDB.hgetall('config', function(err, data) {
 				if (err) throw err;
 				m.nbb.config.backedConfig = data || {};
-				m.common.slowWriteJSONtoFile('./.nbb.config.json', m.nbb.config, function(){
-					m.nbb.setTmpConfig(next);
-				});
+				storage.setItem('nbb.config', m.nbb.config);
+				m.nbb.setTmpConfig(next);
 			});
 		},
 
@@ -954,7 +1002,7 @@ m = {
 
 		// im nice
 		restoreConfig: function(next) {
-			m.nbb.config = require('./.nbb.config.json');
+			m.nbb.config = storage.getItem('nbb.config');
 			RDB.hmset('config', m.nbb.config.backedConfig, function(err){
 				if (err) {
 					logger.error('Something went wrong while restoring your nbb configs');
@@ -1003,6 +1051,7 @@ m = {
 						} else {
 							categoryReturn.redirectRule = m.common.redirectRule('forums/' + _ofid + '/', 'category/' + categoryReturn.slug);
 							logger.useful('{"_ofid":' + _ofid + ',"cid":' + categoryReturn.cid + '}');
+							m.common.setUbbRedirectorKey("forums", _ofid, categoryReturn.cid);
 
 							forumData.migrated = $.extend({}, forum, categoryReturn || {});
 							storage.setItem('f.' + _ofid, forumData);
@@ -1014,7 +1063,14 @@ m = {
 						}
 					});
 				}
-			}, next);
+			}, function(){
+				if (m.common.config.genUbbRedirectorMap) {
+					// we can write the ubbRedirectorMap just in case
+					// be aware that if the an interruption happens during the forums migration, the forums map may not complete
+					storage.setItem('ubbRedirectorMap.json', m.mem.ubbRedirectorMap);
+				}
+				next();
+			});
 		},
 
 		// save the UBB users to nbb's redis
@@ -1098,7 +1154,9 @@ m = {
 								}
 
 								_u_.redirectRule = m.common.redirectRule('users/' + user._ouid + '/' + user._username + '/', 'user/' + user.userslug);
-								logger.useful('{"_ouid":' + user._ouid + ',"uid":' + uid + ',"email":"' + user.email + '","username":"' + user.username + '","pwd":"' + user.password + '","ms":' + _u_.joindate + '}');
+								logger.useful('[user-json] {"email":"' + user.email + '","username":"' + user.username + '","pwd":"' + user.password + '",_ouid":' + user._ouid + ',"uid":' + uid +',"ms":' + _u_.joindate + '},');
+								logger.useful('[user-csv] ' + user.email + ',' + user.username + ',' + user.password + ',' + user._ouid + ',' + uid + ',' + _u_.joindate);
+								m.common.setUbbRedirectorKey("users", user._ouid, user.userslug);
 
 								User.setUserFields(uid, _u_, function() {
 									_u_.uid = uid;
@@ -1129,6 +1187,12 @@ m = {
 
 				// hard code the first UBB Admin user as migrated, as it may actually own few posts/topics
 				storage.setItem('u.1', {normalized: {_ouid: 1}, migrated: {_ouid: 1, uid: 1}});
+
+				if (m.common.config.genUbbRedirectorMap) {
+					// we can write the ubbRedirectorMap just in case
+					// be aware that if the an interruption happens during the users migration, the users map may not complete
+					storage.setItem('ubbRedirectorMap.json', m.mem.ubbRedirectorMap);
+				}
 
 				if (m.nbb.config.autoConfirmEmails) {
 					RDB.keys('confirm:*:email', function(err, keys){
@@ -1200,6 +1264,7 @@ m = {
 							} else {
 								ret.topicData.redirectRule = m.common.redirectRule('topics/' + _otid + '/', 'topic/' + ret.topicData.slug);
 								logger.useful('{"_otid":' + topic._otid + ',"tid":' + ret.topicData.tid + ',"ms":' + topic.timestamp +'}');
+								m.common.setUbbRedirectorKey("topics", topic._otid, ret.topicData.tid);
 
 								Topics.setTopicField(ret.topicData.tid, 'timestamp', topic.timestamp);
 								Topics.setTopicField(ret.topicData.tid, 'viewcount', topic.viewcount);
@@ -1208,7 +1273,7 @@ m = {
 								Posts.setPostField(ret.postData.pid, 'relativeTime', topic.relativeTime);
 
 								topicData.migrated = $.extend({}, topic, ret.topicData);
-								storage.setItem('t.' + _otid, topicData);
+								storage.setItem('t.' + topic, topicData);
 								// todo hack!
 								// process.nextTick is also crashing
 								setTimeout(function(){
@@ -1218,7 +1283,18 @@ m = {
 						});
 					}
 				}
-			}, next);
+			}, function() {
+				if (m.common.config.genUbbRedirectorMap) {
+					// we can write the ubbRedirectorMap here. dont have to wait for posts to be done, since
+					// be aware that if the an interruption happens during the topics migration, the topics map may not complete
+					storage.setItem('ubbRedirectorMap.json', m.mem.ubbRedirectorMap);
+					// free up that memory for the setPosts
+					// I know, I'm cheap
+					m.mem.ubbRedirectorMap = null;
+				}
+
+				next();
+			});
 		},
 
 		// save the UBB posts to nbb's redis

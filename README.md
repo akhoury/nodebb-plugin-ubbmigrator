@@ -196,13 +196,21 @@ and then activate __nodebb-plugin-sanitizehtml__ and let it do the less agressiv
 
 ### Redirect Urls Note
 
-This migrator will spit out the nginx "rewrite rules" for each record, in a log messsage tagged [useful] if it's turned on, but it will also save a file for EACH record (user/topic/forum/post) in the __storage__ directory. You can either ```grep``` the logs and clean them up as you wish, or iterate over these files in storage to build a map for all the ```[:oldid]: [:newIdOrSlug]```. When you build your map, you can use this [ubb-redirector](https://github.com/akhoury/ubb-redirector) to handle thre redirection of these urls (you may have to manually adjust your map, a 2 minutes of work), or use the built-in nginx  [HttpMapModule](http://wiki.nginx.org/HttpMapModule). 
+This migrator will spit out the nginx "rewrite rules" for each record,
+in a log mesage tagged [useful] if it's turned on, but it will also save a file for EACH record (user/topic/forum/post) in the __storage__ directory.
+You can either ```grep``` the logs and clean them up as you wish, or iterate over these files in storage to build a map for all the ```[:oldid]: [:newIdOrSlug]```.
+When you build your map, you can use this [ubb-redirector](https://github.com/akhoury/ubb-redirector) (Or you can just add a flag ```--ubbredirector``` to generate a map that works well with ubb-redirector))
+to handle thre redirection of these urls (you may have to manually adjust your map, a 2 minutes of work),
+or use the built-in nginx  [HttpMapModule](http://wiki.nginx.org/HttpMapModule).
 
 If you decide to use straight out rule-by-rule nginx rewrite rules, not recommended, but you can, see the ```rule: 'rewrite ^/MY_UBB_PATH/${FROM}(.*)$ /MY_NBB_PATH/${TO}$1 permanent;'``` in the config, you can edit that, but leave the ```${FROM}``` and the ```${TO}``` in there as the migrator will replace them with the correct values per each record (forum/topic/user/post).
 
 ### Users new generated passwords Note
 
-in the [Redirect Urls Note](#redirect-urls-note) above, I mentioned the storage files, and the [useful] tags, also these logs will spit out a JSON string for each user's ```_ouid``` (old user id), ```uid``` (new user id), ```email```, ```username```, and ```password```, so you or your developer can easily build a list of these emails with their usernames and passwords so you can send out the blast. If you decide to use the storage to build that list, look for u.* files, which are the users files appended with their old user id (```_ouid```).
+in the [Redirect Urls Note](#redirect-urls-note) above, I mentioned the storage files, and the [useful] tags, (look for ```[user-json]``` and/or ```[user-csv]```)
+also these logs will spit out a JSON (AND CSV) string for each user's ```email```, ```username```, ```password```, ```_ouid``` (old user id), ```uid``` (new user id) and ```ms``` (joindate in Milliseconds),
+so you or your developer can easily build a list of these emails with their usernames and passwords so you can send out the blast.
+If you decide to use the storage to build that list, look for u.* files, which are the users files appended with their old user id (```_ouid```).
 
 
 ## Limitations
