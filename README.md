@@ -197,9 +197,9 @@ and then activate __nodebb-plugin-sanitizehtml__ and let it do the less agressiv
 ### Redirect Urls Note
 
 This migrator will spit out the nginx "rewrite rules" for each record,
-in a log mesage tagged [useful] if it's turned on, but it will also save a file for EACH record (user/topic/forum/post) in the __storage__ directory.
+in a log message tagged [useful] if it's turned on in the log, but it will also save a file for EACH record (user/topic/forum/post) in the __storage__ directory.
 You can either ```grep``` the logs and clean them up as you wish, or iterate over these files in storage to build a map for all the ```[:oldid]: [:newIdOrSlug]```.
-When you build your map, you can use this [ubb-redirector](https://github.com/akhoury/ubb-redirector) (Or you can just add a flag ```--ubbredirector``` to generate a map that works well with ubb-redirector))
+When you build your map, you can use this [ubb-redirector](https://github.com/akhoury/ubb-redirector) (Or you can just add a flag ```--ubbredirector``` to generate a map that works well with ubb-redirector)
 to handle thre redirection of these urls (you may have to manually adjust your map, a 2 minutes of work),
 or use the built-in nginx  [HttpMapModule](http://wiki.nginx.org/HttpMapModule).
 
@@ -207,24 +207,23 @@ If you decide to use straight out rule-by-rule nginx rewrite rules, not recommen
 
 ### Users new generated passwords Note
 
-in the [Redirect Urls Note](#redirect-urls-note) above, I mentioned the storage files, and the [useful] tags, (look for ```[user-json]``` and/or ```[user-csv]```)
-also these logs will spit out a JSON (AND CSV) string for each user's ```email```, ```username```, ```password```, ```_ouid``` (old user id), ```uid``` (new user id) and ```ms``` (joindate in Milliseconds),
+in the [Redirect Urls Note](#redirect-urls-note) above, I mentioned the storage files, and the [useful] tags, (look for ```[user-json]``` and/or ```[user-csv]```) these logs spit out a __JSON__ (and __CSV__) string for each user's ```email```, ```username```, ```password```, ```_ouid``` (old user id), ```uid``` (new user id) and ```ms``` (joindate in Milliseconds),
 so you or your developer can easily build a list of these emails with their usernames and passwords so you can send out the blast.
-If you decide to use the storage to build that list, look for u.* files, which are the users files appended with their old user id (```_ouid```).
+If you decide to use the storage to build that list, look for u.* files, which are the users files appended with their old user id ```_ouid```.
 
 
 ## Limitations
 * UNIX only (Linux, Mac) but no Windows support yet, it's one a time use, I probably won't support Windows soon.
 * If you're migrating very large forum, I'm talking about 200k records and up, expect to wait hours, depending on your machine, but, you might need to hack and disable some things in NodeBB, temporarily. Can't figure out what yet, since NodeBB is highly active and unstable at the moment, but give me a buzz, I'll help you out. once the next stable version comes out, I will stabilize this migrator.
 
-### TODO
-* todo !!!!! HITTING MEMORY LIMITS OVER 18k POSTS IF MARKDOWNING IS TURNED ON !! FUCK it turn it off !!
-* todo maybe go through all users who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to my old forum avatar dir
-* todo still, make sure the old [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars
-* todo create a nodebb-theme that works with the site
-* todo send emails to all users with temp passwords
-* todo if I have time, maybe implement a nbb plugin that enforces the 1 time use of temp passwords.
-* todo TEST yo
+### TODO, some are for you to do.
+* todo-me: !!!!! HITTING MEMORY LIMITS OVER 18k POSTS IF MARKDOWNING IS TURNED ON !! FUCK it turn it off !! see [Markdown Note](#markdown-note)
+* todo-you go through all users who has user.customPicture == true, and test each image url if 200 or not and filter the ones pointing to my old forum avatar dir.
+* todo-you, make sure the old [YOUR_UBB_PATH]/images/avatars/* is still normally accessible to keep the old avatars, see this [nginx example config](https://github.com/akhoury/ubb-redirector/blob/master/nginx.example.com) for [ubb-redirector](https://github.com/akhoury/ubb-redirector)
+* todo-you create a nodebb-theme that works with the site
+* todo-you send emails to all users with temp passwords see [Users new generated passwords Note](#users-new-generated-passwords-note)
+* todo-both maybe implement a nbb plugin that enforces the 1 time use of temp passwords.
+* todo-both TEST
 
 ### Terminology
 

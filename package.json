@@ -1,40 +1,40 @@
 {
-    "name": "nodebb-plugin-ubbmigrator",
-    "version": "0.0.3",
-    "description": "Converts your UBB Topics, Posts and Users to NodeBB",
-    "main": "library.js",
-    "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/akhoury/nodebb-plugin-ubbmigrator"
-    },
-    "keywords": [
-        "nodebb",
-        "plugin",
-        "migrator",
-        "convertor",
-        "ubb"
-    ],
-    "author": {
-        "name": "akhoury",
-        "email": "bentael@gmail.com"
-    },
-    "license": "MIT",
-    "bugs": {
-        "url": "https://github.com/akhoury/nodebb-plugin-ubbmigrator/issues"
-    },
-    "dependencies": {
-        "jquery": "~1.8.3",
+	"name": "nodebb-plugin-ubbmigrator",
+	"version": "0.0.3",
+	"description": "Converts your UBB Topics, Posts and Users to NodeBB",
+	"main": "ubbmigrator.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/akhoury/nodebb-plugin-ubbmigrator"
+	},
+	"keywords": [
+		"nodebb",
+		"plugin",
+		"migrator",
+		"convertor",
+		"ubb"
+	],
+	"author": {
+		"name": "akhoury",
+		"email": "bentael@gmail.com"
+	},
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/akhoury/nodebb-plugin-ubbmigrator/issues"
+	},
+	"dependencies": {
+		"jquery": "~1.8.3",
 		"fs-extra": "~0.8.1",
-        "glob": "~3.2.7",
-        "async": "~0.2.9",
-        "html-md": "~3.0.2",
-        "optimist": "~0.6.0",
-        "exec-sync": "~0.1.6",
-        "node-persist": "git://github.com/simonlast/node-persist.git",
-        "mysql": "~2.0.0",
+		"glob": "~3.2.7",
+		"async": "~0.2.9",
+		"html-md": "~3.0.2",
+		"optimist": "~0.6.0",
+		"exec-sync": "~0.1.6",
+		"node-persist": "git://github.com/simonlast/node-persist.git",
+		"mysql": "~2.0.0",
 		"marked": "~0.2.10"
-    }
+	}
 }
