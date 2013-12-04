@@ -358,12 +358,10 @@ m = {
 		// fn is optional which will take item and apply something to it
 		convertListToMap: function(list, key, fn){
 			var map = {};
-			var f = typeof fn == 'function';
+			fn = typeof fn == 'function' ? fn : function(itm){ return itm;};
 
 			list.forEach(function(item) {
-				if (f)
-					item = fn(item);
-
+				item = fn(item);
 				map[item[key]] = item;
 			});
 			return map;
