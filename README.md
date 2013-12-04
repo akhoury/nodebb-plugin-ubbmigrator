@@ -79,7 +79,7 @@ cd node_modules/nodebb-plugin-ubbmigrator
 vim config.json
 
 # then 
-node ubbmigrator.js --flush --config="config.json" --storage="/home/you/Desktop/there" --log="useful,info,warn,debug,error"
+node ubbmigrator.js --flush --config="config.json" --storage="/home/you/Desktop/there" --log="useful,info,warn,debug,error" --ubbredirector
 
 # and hope for the best
 # I would grep the [useful] lines out stuff later, they're very useful for redirection purposes, getting users email/username/passwd to send them out etc..
