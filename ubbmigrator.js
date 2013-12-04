@@ -238,7 +238,13 @@ m = {
 					// if you want to auto confirm the user's accounts..
 					autoConfirmEmails: true,
 
-					userReputationMultiplier: 5
+					userReputationMultiplier: 5,
+
+					// async.eachLimit
+					forumsBatchSize: 10000,
+					usersBatchSize: 10000,
+					topicsBatchSize: 10000,
+					postsBatchSize: 10000
 
 				}, config.nbb);
 
@@ -252,7 +258,7 @@ m = {
 
 			// dev purposes, must be valid JSON
 			// brotip: i use it like dis
-			// node ubbmigrator.js --flush --storage="$HOME/Desktop/storage" --log="debug" --ubbredirector --time="{\"users\":{\"before\":1004537600},\"forums\":{\"before\":1004537600},\"topics\":{\"before\":1004537600},\"posts\":{\"before\":1004537600}}"
+			// node ubbmigrator.js --flush --storage="$HOME/Desktop/storage" --log="debug,useful" --ubbredirector --time="{\"users\":{\"before\":1004537600},\"forums\":{\"before\":1004537600},\"topics\":{\"before\":1004537600},\"posts\":{\"before\":1004537600}}"
 			try {
 				m.ubb.config.timeMachine = JSON.parse(argv.t || argv.time || JSON.stringify(m.ubb.config.timeMachine));
 			} catch (e) {
@@ -1018,8 +1024,9 @@ m = {
 		// forums chez UBB are categories chez NBB
 		setForums: function(next) {
 			var count = 0;
+			var startTime = new Date().getTime();
 
-			async.eachSeries(m.mem._ofids, function(_ofid, done) {
+			async.eachLimit(m.mem._ofids, m.nbb.config.forumsBatchSize, function(_ofid, done) {
 				count++;
 
 				var forumData = storage.getItem('f.' + _ofid);
@@ -1064,6 +1071,8 @@ m = {
 					});
 				}
 			}, function(){
+				logger.debug('Persisting ' + m.mem._ofids.length + ' forums took: ' + ((new Date().getTime()-startTime)/1000).toFixed(2) + ' seconds');
+
 				if (m.common.config.genUbbRedirectorMap) {
 					// we can write the ubbRedirectorMap just in case
 					// be aware that if the an interruption happens during the forums migration, the forums map may not complete
@@ -1078,10 +1087,11 @@ m = {
 			var count = 0;
 			var nbbAdministratorsGid = storage.getItem('nbb.groups.administrators.gid');
 			var nbbModeratorsGid = storage.getItem('nbb.groups.moderators.gid');
+			var startTime = new Date().getTime();
 
 			logger.debug("Administrator gid: " + nbbAdministratorsGid + " Moderators gid: " + nbbModeratorsGid);
 
-			async.eachSeries(m.mem._ouids, function(_ouid, done) {
+			async.eachLimit(m.mem._ouids, m.nbb.config.usersBatchSize, function(_ouid, done) {
 				count++;
 
 				var userData = storage.getItem('u.' + _ouid);
@@ -1184,6 +1194,7 @@ m = {
 					}
 				}
 			}, function(){
+				logger.debug('Persisting ' + m.mem._ouids.length + ' users took: ' + ((new Date().getTime()-startTime)/1000).toFixed(2) + ' seconds');
 
 				// hard code the first UBB Admin user as migrated, as it may actually own few posts/topics
 				storage.setItem('u.1', {normalized: {_ouid: 1}, migrated: {_ouid: 1, uid: 1}});
@@ -1210,8 +1221,9 @@ m = {
 		// save the UBB topics to nbb's redis
 		setTopics: function(next) {
 			var count = 0;
+			var startTime = new Date().getTime();
 
-			async.eachSeries(m.mem._otids, function(_otid, done) {
+			async.eachLimit(m.mem._otids, m.nbb.config.topicsBatchSize, function(_otid, done) {
 				count++;
 
 				var topicData = storage.getItem('t.' + _otid);
@@ -1284,6 +1296,8 @@ m = {
 					}
 				}
 			}, function() {
+				logger.debug('Persisting' + m.mem._otids.length + ' topics took: ' + ((new Date().getTime()-startTime)/1000).toFixed(2) + ' seconds');
+
 				if (m.common.config.genUbbRedirectorMap) {
 					// we can write the ubbRedirectorMap here. dont have to wait for posts to be done, since
 					// be aware that if the an interruption happens during the topics migration, the topics map may not complete
@@ -1300,8 +1314,9 @@ m = {
 		// save the UBB posts to nbb's redis
 		setPosts: function(next) {
 			var count = 0;
+			var startTime = new Date().getTime();
 
-			async.eachSeries(m.mem._opids, function(_opid, done) {
+			async.eachLimit(m.mem._opids, m.nbb.config.postsBatchSize, function(_opid, done) {
 				count++;
 
 				var postData = storage.getItem('p.' + _opid);
@@ -1366,7 +1381,10 @@ m = {
 						});
 					}
 				}
-			}, next);
+			}, function(){
+				logger.debug('Persisting' + m.mem._opids.length + ' posts took: ' + ((new Date().getTime()-startTime)/1000).toFixed(2) + ' seconds');
+				next();
+			});
 		}
 	}
 };

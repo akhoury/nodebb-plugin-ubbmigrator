@@ -6,11 +6,12 @@ module.exports = {
         this.i = this.l.indexOf("info") >= 0;
         this.w = this.l.indexOf("warn") >= 0;
         this.e = this.l.indexOf("error") >= 0;
-        this.s = this.l.indexOf("useful") >= 0;
+        this.u = this.l.indexOf("useful") >= 0;
 
         //rules
         this.i = this.d || this.i;
         this.w = this.d || this.w;
+        this.u = this.d || this.u;
         // basically always true
         this.e = this.d || this.e || this.i || this.w;
 
@@ -22,7 +23,7 @@ module.exports = {
             this.debug = function(){};
         if (!this.e)
             this.error = function(){};
-		if (!this.s)
+		if (!this.u)
             this.useful = function(){};
 
         return this;
