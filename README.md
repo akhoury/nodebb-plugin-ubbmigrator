@@ -178,8 +178,9 @@ see [config.json](config.json), obviously I can't neatly comment a JSON file, so
 
 ### Redis Note
 
-see [redis.ubbmigrator.conf](redis.ubbmigrator.conf), look for [ubbmigrator] tag to find the temporary changes you need to make.
-remember to backup your original config, you will need them after the migration.
+see [redis.ubbmigrator.conf](redis.ubbmigrator.conf), I would leave the default redis untouched, just add those to the bottom of your redis.conf file.
+then after the migration is complete, you must, __before__ you kill your redis server, ```redis-cli bgsave``` to actually write the data to disk, then remove these extra
+configs and restart your redis server.
 If you're an redis guru, you don't need my help, but take a look at it anyway and let me know where I went wrong :)
 
 ### Markdown Note
