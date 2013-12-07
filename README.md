@@ -1,3 +1,8 @@
+IMPORTANT
+=========
+
+This project is being refactored and moving to [nodebb-plugin-import-ubb](https://github.com/akhoury/nodebb-plugin-import-ubb)
+
 nodebb-plugin-ubbmigrator
 =========
 
